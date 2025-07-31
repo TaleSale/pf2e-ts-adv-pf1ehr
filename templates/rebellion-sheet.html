@@ -1,0 +1,161 @@
+<form class="rebellion-sheet-form" autocomplete="off">
+    <div class="sheet-container">
+        <div class="points-section">
+            <div class="liberation-box">
+                <div class="box-header">Очки Освобождения</div>
+                <div class="box-value liberation-value">{{rebellion.liberation}}</div>
+                <div class="sub-points-grid">
+                    <div class="sub-point-box">
+                        <div class="sub-point-header">Верность</div>
+                        <div class="sub-point-value">{{rebellion.loyalty}}</div>
+                    </div>
+                    <div class="plus-sign">+</div>
+                    <div class="sub-point-box">
+                        <div class="sub-point-header">Скрытность</div>
+                        <div class="sub-point-value">{{rebellion.secrecy}}</div>
+                    </div>
+                    <div class="plus-sign">+</div>
+                    <div class="sub-point-box">
+                        <div class="sub-point-header">Безопасность</div>
+                        <div class="sub-point-value">{{rebellion.security}}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="authority-box">
+                <div class="box-header">Очки Власти</div>
+                <div class="box-value authority-value">
+                    {{#if isGM}}
+                    <button type="button" class="point-change-btn" data-action="change-points" data-category="authority" data-amount="-1"><i class="fas fa-minus"></i></button>
+                    {{/if}}
+                    <span>{{rebellion.authority}}</span>
+                    {{#if isGM}}
+                    <button type="button" class="point-change-btn" data-action="change-points" data-category="authority" data-amount="1"><i class="fas fa-plus"></i></button>
+                    {{/if}}
+                </div>
+                <div class="authority-rules">
+                    <ul>
+                        <li><strong>(+)</strong> за каждого захваченного ПИ</li>
+                        <li><strong>(-)</strong> за победу над союзниками Труна</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="assets-section">
+            <!-- Колонка Верности -->
+            <div class="asset-column" data-category="loyalty">
+                <div class="asset-column-header">Активы: Верность</div>
+                <div class="asset-column-subheader">
+                    <span>Очки</span>
+                    {{#if isGM}}
+                    <div class="point-controls">
+                        <button type="button" class="point-change-btn" data-action="change-points" data-category="loyalty" data-amount="-1" title="Уменьшить очки Верности"><i class="fas fa-minus"></i></button>
+                        <button type="button" class="point-change-btn" data-action="change-points" data-category="loyalty" data-amount="1" title="Увеличить очки Верности"><i class="fas fa-plus"></i></button>
+                    </div>
+                    {{/if}}
+                    <a class="roll-icon" data-action="roll-bonus" data-category="loyalty" data-label="Верность" title="Бросок 1d20 + Верность"><i class="fas fa-dice-d20"></i></a>
+                </div>
+                <div class="asset-rows-container">
+                    {{#each rebellion.assets.loyalty}}
+                    <div class="asset-row" data-asset-id="{{this.id}}">
+                        <textarea class="asset-desc" data-field="description" placeholder="Описание актива...">{{this.description}}</textarea>
+                        <input class="asset-pts" type="number" value="{{this.points}}" data-field="points">
+                        <a class="asset-ctrl" data-action="delete-asset" title="Удалить актив"><i class="fas fa-trash"></i></a>
+                    </div>
+                    {{/each}}
+                </div>
+                <button type="button" class="add-asset-btn" data-action="add-asset" data-category="loyalty"><i class="fas fa-plus"></i> Добавить</button>
+            </div>
+
+            <!-- Колонка Скрытности -->
+            <div class="asset-column" data-category="secrecy">
+                <div class="asset-column-header">Активы: Скрытность</div>
+                <div class="asset-column-subheader">
+                    <span>Очки</span>
+                    {{#if isGM}}
+                    <div class="point-controls">
+                        <button type="button" class="point-change-btn" data-action="change-points" data-category="secrecy" data-amount="-1" title="Уменьшить очки Скрытности"><i class="fas fa-minus"></i></button>
+                        <button type="button" class="point-change-btn" data-action="change-points" data-category="secrecy" data-amount="1" title="Увеличить очки Скрытности"><i class="fas fa-plus"></i></button>
+                    </div>
+                    {{/if}}
+                    <a class="roll-icon" data-action="roll-bonus" data-category="secrecy" data-label="Скрытность" title="Бросок 1d20 + Скрытность"><i class="fas fa-dice-d20"></i></a>
+                </div>
+                <div class="asset-rows-container">
+                    {{#each rebellion.assets.secrecy}}
+                    <div class="asset-row" data-asset-id="{{this.id}}">
+                        <textarea class="asset-desc" data-field="description" placeholder="Описание актива...">{{this.description}}</textarea>
+                        <input class="asset-pts" type="number" value="{{this.points}}" data-field="points">
+                        <a class="asset-ctrl" data-action="delete-asset" title="Удалить актив"><i class="fas fa-trash"></i></a>
+                    </div>
+                    {{/each}}
+                </div>
+                <button type="button" class="add-asset-btn" data-action="add-asset" data-category="secrecy"><i class="fas fa-plus"></i> Добавить</button>
+            </div>
+
+            <!-- Колонка Безопасности -->
+            <div class="asset-column" data-category="security">
+                <div class="asset-column-header">Активы: Безопасность</div>
+                <div class="asset-column-subheader">
+                    <span>Очки</span>
+                    {{#if isGM}}
+                    <div class="point-controls">
+                        <button type="button" class="point-change-btn" data-action="change-points" data-category="security" data-amount="-1" title="Уменьшить очки Безопасности"><i class="fas fa-minus"></i></button>
+                        <button type="button" class="point-change-btn" data-action="change-points" data-category="security" data-amount="1" title="Увеличить очки Безопасности"><i class="fas fa-plus"></i></button>
+                    </div>
+                    {{/if}}
+                    <a class="roll-icon" data-action="roll-bonus" data-category="security" data-label="Безопасность" title="Бросок 1d20 + Безопасность"><i class="fas fa-dice-d20"></i></a>
+                </div>
+                <div class="asset-rows-container">
+                    {{#each rebellion.assets.security}}
+                    <div class="asset-row" data-asset-id="{{this.id}}">
+                        <textarea class="asset-desc" data-field="description" placeholder="Описание актива...">{{this.description}}</textarea>
+                        <input class="asset-pts" type="number" value="{{this.points}}" data-field="points">
+                        <a class="asset-ctrl" data-action="delete-asset" title="Удалить актив"><i class="fas fa-trash"></i></a>
+                    </div>
+                    {{/each}}
+                </div>
+                <button type="button" class="add-asset-btn" data-action="add-asset" data-category="security"><i class="fas fa-plus"></i> Добавить</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .rebellion-sheet-window .window-content { padding: 0; background: url(systems/pf2e/assets/sheet/parchment.jpg); }
+        .rebellion-sheet-form { font-family: sans-serif; color: #191813; }
+        .sheet-container { display: flex; flex-direction: column; height: 100%; }
+        .points-section { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 2px solid #385d8a; }
+        .liberation-box, .authority-box { padding: 10px; }
+        .liberation-box { border-right: 1px solid #b5b3a8; }
+        .box-header { background-color: #385d8a; color: white; text-align: center; padding: 8px; font-weight: bold; }
+        .box-value { text-align: center; font-size: 3em; font-weight: bold; padding: 15px 0; }
+        .authority-value { display: flex; justify-content: center; align-items: center; gap: 15px; }
+        .sub-points-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; text-align: center; background-color: #385d8a; color: white; }
+        .sub-point-header { font-weight: bold; padding: 5px; }
+        .sub-point-value { background-color: #e9e7e2; color: #191813; padding: 10px; font-size: 1.5em; font-weight: bold; border-top: 1px solid #385d8a; }
+        .plus-sign { font-size: 1.5em; font-weight: bold; }
+        .authority-rules { font-size: 0.9em; padding: 10px; color: #444; }
+        .authority-rules ul { margin: 0; padding-left: 20px; }
+        .assets-section { display: flex; flex-grow: 1; }
+        .asset-column { display: flex; flex-direction: column; flex: 1; border-right: 1px solid #b5b3a8; }
+        .asset-column:last-child { border-right: none; }
+        .asset-column-header { padding: 8px; font-weight: bold; text-align: center; border-bottom: 1px solid #b5b3a8; }
+        .asset-column-subheader { display: grid; grid-template-columns: 1fr auto auto; align-items: center; padding: 5px 8px; border-bottom: 1px solid #b5b3a8; font-weight: bold; }
+        .point-controls { display: flex; gap: 5px; }
+        .point-change-btn { background: #e9e7e2; border: 1px solid #aaa; color: #191813; cursor: pointer; width: 24px; height: 24px; }
+        .roll-icon { font-size: 1.2em; margin-left: 10px; cursor: pointer; color: #666; }
+        .asset-rows-container { padding: 5px; flex-grow: 1; overflow-y: auto; }
+        .asset-row { display: flex; gap: 5px; align-items: flex-start; padding: 5px; margin-bottom: 5px; background-color: #e9e7e2; border: 1px solid #aaa; border-radius: 3px; }
+        .asset-desc { flex-grow: 1; border: 1px solid #aaa; background: #fff; color: #191813; resize: none; font-family: inherit; font-size: 0.9em; padding: 4px; overflow-y: hidden; border-radius: 3px; }
+        .asset-pts { flex-shrink: 0; width: 50px; text-align: center; border: 1px solid #aaa; background: #fff; color: #191813; border-radius: 3px; height: 28px; }
+        .asset-ctrl { flex-shrink: 0; width: 25px; text-align: center; color: #900; cursor: pointer; padding-top: 4px; font-size: 1.1em; }
+        .add-asset-btn { margin: 8px; margin-top: auto; padding: 5px; border: 1px dashed #aaa; background: #e9e7e2; color: #191813; cursor: pointer; text-align: center; }
+        #rebellion-sheet-button {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; margin: 0 4px; vertical-align: middle;
+            color: #f0f0e0; font-family: 'Signika', sans-serif; font-weight: bold;
+            font-size: 14px; text-decoration: none; border: 1px solid #555;
+            border-radius: 3px; background-color: rgba(150, 50, 50, 0.7); cursor: pointer;
+        }
+        #rebellion-sheet-button:hover { background-color: rgba(200, 50, 50, 1); }
+    </style>
+</form>

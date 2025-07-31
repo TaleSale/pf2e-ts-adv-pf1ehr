@@ -1,0 +1,42 @@
+{
+  "id": "pf2e-ts-adv-pf1ehr",
+  "title": "PF2E-TS-PF1EHR (Восстание Ада)",
+  "description": "Дополнение для АП Восстание Ада (Конвертация с ПФ1Е в ПФ2Е)",
+  "version": "1.0.1",
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "7.1.0"
+        }
+      }
+    ]
+  },
+  "compatibility": {
+    "minimum": "12",
+    "verified": "13",
+    "maximum": "13"
+  },
+  "scripts": [
+    "rebellion-sheet.js"
+  ],
+    "languages": [
+        {
+            "lang": "ru",
+            "name": "Русский",
+            "path": "lang/ru.json"
+        }
+    ],
+  "authors": [
+    {
+      "name": "TaleSale",
+      "url": "https://discord.gg/jYvjzn5",
+      "flags": {}
+    }
+  ],
+  "url": "https://github.com/TaleSale/pf2e-ts-adv-pf1ehr",
+  "manifest": "https://raw.githubusercontent.com/TaleSale/pf2e-ts-adv-pf1ehr/main/module.json",
+  "download": "https://github.com/TaleSale/pf2e-ts-adv-pf1ehr/archive/refs/heads/main.zip"
+}
