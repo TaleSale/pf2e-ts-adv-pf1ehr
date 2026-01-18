@@ -1,0 +1,60 @@
+{
+  "name": "Journal Entry",
+  "pages": [
+    {
+      "sort": 100000,
+      "name": "Text",
+      "type": "text",
+      "_id": "avoF1fwU82YCbbdM",
+      "system": {},
+      "title": {
+        "show": true,
+        "level": 1
+      },
+      "image": {},
+      "text": {
+        "format": 1,
+        "content": "<p><span style=\"color:oklab(0.952331 0.000418991 -0.00125992);font-family:'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;font-size:18px;font-style:normal;font-variant-ligatures:normal;font-variant-caps:normal;font-weight:400;letter-spacing:normal;orphans:2;text-align:left;text-indent:0px;text-transform:none;widows:2;word-spacing:0px;-webkit-text-stroke-width:0px;white-space:break-spaces;background-color:oklab(0.219499 0.00211129 -0.00744916);text-decoration-thickness:initial;text-decoration-style:initial;text-decoration-color:initial;display:inline !important;float:none\">Мне нужно чтобы когда в журнале встречается кнопка @Rebellion[type:notoriety], как стандартные кнопки @check, он совершал проверку Известности. Все кнопки @Rebellion не требуют иметь выбранный токен и совершают броски листа восстания. По сюжету тут будет проверка узнает ли повстанцев стража. Где КС это их известность и нужно выбросить равно или больше, чтобы тебя не узнали - то есть КС у Известности берется актоматически. Так же кнопка @Rebellion[type:notoriety/2] или @Rebellion[type:notoriety*2] ибо есть сюжетные ситуации когда ты бросаешь против вдвое больше или вдвое меньше чем КС Известноти. Так же нужно кнопка @Rebellion[type:notoriety+dangers], когда идет проврка против КС равного Известность+Опасность Кинтарго. Добавить так же надо @Rebellion[type:dangers], когда идет просто проверка опасноти кинтарго. </span><br class=\"Apple-interchange-newline\" /></p>"
+      },
+      "video": {
+        "controls": true,
+        "volume": 0.5
+      },
+      "src": null,
+      "category": null,
+      "flags": {},
+      "_stats": {
+        "coreVersion": "13.348",
+        "systemId": "pf2e",
+        "systemVersion": "7.8.0",
+        "createdTime": 1766084668901,
+        "modifiedTime": 1766562333701,
+        "lastModifiedBy": "ANEMHORZaEmCTQJQ"
+      },
+      "ownership": {
+        "default": -1
+      }
+    }
+  ],
+  "folder": null,
+  "categories": [],
+  "flags": {},
+  "_stats": {
+    "coreVersion": "13.348",
+    "systemId": "pf2e",
+    "systemVersion": "7.8.0",
+    "createdTime": 1766084666388,
+    "modifiedTime": 1766084666388,
+    "lastModifiedBy": "ANEMHORZaEmCTQJQ",
+    "exportSource": {
+      "worldId": "21",
+      "uuid": "JournalEntry.tqoi6Z0XPV5DyB8E",
+      "coreVersion": "13.348",
+      "systemId": "pf2e",
+      "systemVersion": "7.8.0"
+    }
+  },
+  "ownership": {
+    "default": 0
+  }
+}

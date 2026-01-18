@@ -2,7 +2,7 @@
   "id": "pf2e-ts-adv-pf1ehr",
   "title": "PF2E-TS-PF1EHR (Восстание Ада)",
   "description": "Дополнение для АП Восстание Ада (Конвертация с ПФ1Е в ПФ2Е)",
-  "version": "1.2.0",
+  "version": "2.0.1",
   "relationships": {
     "systems": [
       {
@@ -19,16 +19,18 @@
     "verified": "13",
     "maximum": "13"
   },
-  "scripts": [
-    "rebellion-sheet.js"
+  "esmodules": [
+    "scripts/config.js",
+    "scripts/data-handler.js",
+    "scripts/sheet.js",
+    "scripts/main.js",
+    "scripts/teams.js",
+    "scripts/allies.js"
   ],
-    "languages": [
-        {
-            "lang": "ru",
-            "name": "Русский",
-            "path": "lang/ru.json"
-        }
-    ],
+  "styles": [
+    "styles/rebellion-sheet.css"
+  ],
+  "socket": true,
   "authors": [
     {
       "name": "TaleSale",
