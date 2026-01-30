@@ -2,7 +2,7 @@
   "id": "pf2e-ts-adv-pf1ehr",
   "title": "PF2E-TS-PF1EHR (Восстание Ада)",
   "description": "Дополнение для АП Восстание Ада (Конвертация с ПФ1Е в ПФ2Е)",
-  "version": "2.0.3,
+  "version": "2.0.3",
   "relationships": {
     "systems": [
       {
