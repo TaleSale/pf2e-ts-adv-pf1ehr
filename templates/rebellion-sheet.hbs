@@ -656,14 +656,6 @@
                                 </div>
                             </div>
                             <div class="control-row">
-                                <label class="control-label">Содержимое:</label>
-                                <div class="control-content">
-                                    <textarea name="caches.{{idx}}.contents" class="cache-textarea cache-contents-droppable" 
-                                        ondrop="this.value += event.dataTransfer.getData('text/plain')" 
-                                        ondragover="event.preventDefault()">{{cache.contents}}</textarea>
-                                </div>
-                            </div>
-                            <div class="control-row">
                                 <label class="control-label">Стоимость (зм):</label>
                                 <div class="control-content">
                                     <input type="number" name="caches.{{idx}}.value" value="{{cache.value}}" min="0" class="cache-input">
@@ -679,9 +671,6 @@
                         <div class="cache-info">
                             <div class="cache-location">
                                 <strong>Местоположение:</strong> {{cache.location}}
-                            </div>
-                            <div class="cache-contents">
-                                <strong>Содержимое:</strong> {{cache.contents}}
                             </div>
                             <div class="cache-details">
                                 <span><strong>Стоимость:</strong> {{cache.value}} зм</span>
@@ -746,6 +735,9 @@
         </div>
 
         <div class="tab" data-tab="effects" data-group="primary">
+            <div class="effects-header" style="margin-bottom: 10px;">
+                <button type="button" class="add-custom-effect-btn"><i class="fas fa-plus"></i> Добавить модификатор</button>
+            </div>
             <div class="teams-list">
                 {{#each data.events as |eff idx|}}
                 <div class="team-card" style="align-items:center; flex-wrap:wrap;">
@@ -761,6 +753,12 @@
                             {{#if eff.isPersistent}}<span style="color:#194680;">Постоянное</span>{{/if}}
                             {{#if eff.weekStarted}}<span>Неделя: {{eff.weekStarted}}</span>{{/if}}
                             {{#if eff.duration}}<span>Длительность: {{eff.duration}}</span>{{/if}}
+                            {{#if eff.isCustomModifier}}
+                            <span style="color:#9c27b0; font-weight:bold;">
+                                <i class="fas fa-sliders-h"></i> Модификатор: {{#if (gte eff.modifierValue 0)}}+{{/if}}{{eff.modifierValue}}
+                                ({{#each eff.affectedChecks}}{{#if @index}}, {{/if}}{{#if (eq this "loyalty")}}Верность{{/if}}{{#if (eq this "security")}}Безопасность{{/if}}{{#if (eq this "secrecy")}}Секретность{{/if}}{{/each}})
+                            </span>
+                            {{/if}}
                         </div>
                         {{#if (eq eff.name "Предатель в тюрьме")}}
                         <div style="text-align:right;">
@@ -781,10 +779,17 @@
                             </button>
                         </div>
                         {{else}}
-                        {{#if eff.mitigate}}
-                        {{#unless (and (eq eff.name "Инквизиция") (not eff.isPersistent))}}
+                        {{#if (eq eff.name "Недееспособная команда")}}
                         <div style="text-align:right;">
-                            {{#if (and (eq eff.name "Инквизиция") eff.isPersistent)}}
+                            <button type="button" class="restore-disabled-team-btn"
+                                style="font-size:10px; padding:2px 8px; width:auto;">
+                                <i class="fas fa-coins"></i> Восстановить
+                            </button>
+                        </div>
+                        {{else}}
+                        {{#if eff.mitigate}}
+                        <div style="text-align:right;">
+                            {{#if (eq eff.name "Инквизиция")}}
                             <button type="button" class="show-inquisition-info-btn"
                                 style="font-size:10px; padding:2px 8px; width:auto;">
                                 <i class="fas fa-info-circle"></i> Информация
@@ -809,7 +814,7 @@
                                 {{#if isGM}} (КС {{eff.dc}}){{/if}}
                             </span>
                         </div>
-                        {{/unless}}
+                        {{/if}}
                         {{/if}}
                         {{/if}}
                     </div>

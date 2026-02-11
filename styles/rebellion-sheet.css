@@ -714,6 +714,21 @@
     color: #ffd700;
 }
 
+/* Add Custom Effect Button */
+.add-custom-effect-btn {
+    background: #9c27b0;
+    color: white;
+    border: 1px solid #c9ad6a;
+    padding: 5px 15px;
+    cursor: pointer;
+    font-family: "Cinzel";
+    border-radius: 3px;
+}
+
+.add-custom-effect-btn:hover {
+    background: #ab47bc;
+}
+
 /* Recovery/Find Buttons */
 .recover-team-btn,
 .find-team-btn {
@@ -1562,58 +1577,4 @@
 
 .unique-teams-list .team-card.drag-over-bottom {
     border-bottom-color: #6a1b9a;
-}
-/* Cache Content Drag and Drop Styles */
-.cache-contents-droppable {
-    transition: all 0.2s ease;
-    position: relative;
-}
-
-.cache-contents-droppable:hover {
-    border-color: #4caf50;
-    box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
-}
-
-.cache-contents-droppable::before {
-    content: "💎 Перетащите предметы сюда для создания UUID ссылок";
-    position: absolute;
-    top: -20px;
-    left: 0;
-    font-size: 10px;
-    color: #666;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    white-space: nowrap;
-    z-index: 10;
-}
-
-.cache-contents-droppable:focus::before,
-.cache-contents-droppable:hover::before {
-    opacity: 1;
-}
-
-/* Enhanced drag over state */
-.cache-contents-droppable[style*="background-color: rgb(232, 245, 232)"] {
-    background-color: #e8f5e8 !important;
-    border: 2px dashed #4caf50 !important;
-    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5) !important;
-}
-
-.cache-contents-droppable[style*="border: 2px dashed rgb(76, 175, 80)"] {
-    animation: pulse-border 1s infinite;
-}
-
-@keyframes pulse-border {
-    0% { border-color: #4caf50; }
-    50% { border-color: #81c784; }
-    100% { border-color: #4caf50; }
-}
-
-/* Tooltip for drag and drop functionality */
-.cache-edit-mode .control-row:has(.cache-contents-droppable) .control-label::after {
-    content: " 💎";
-    font-size: 10px;
-    opacity: 0.7;
-    margin-left: 2px;
 }

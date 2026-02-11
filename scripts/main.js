@@ -1,8 +1,172 @@
-import { DataHandler } from "./data-handler.js";
+﻿import { DataHandler } from "./data-handler.js";
 import { RebellionSheet } from "./sheet.js";
 import { PF2E_SKILL_LABELS, CHECK_LABELS, CATEGORY_LABELS } from "./config.js";
-import { getTeamDefinition, getEarnIncomeDC, calculateEarnIncome, formatIncome, getHalfRankBonus, getTeamProficiencyBonus } from "./teams.js";
-import { getAllyData } from "./allies.js";
+import { getTeamDefinition, getEarnIncomeDC, calculateEarnIncome, formatIncome, getHalfRankBonus, getTeamProficiencyBonus, getAllyData } from "./utils.js";
+
+// === Centralized type/stat config dictionaries ===
+const TYPE_CONFIG = {
+    "notoriety": { label: "Известность", icon: "fa-eye" },
+    "notoriety/2": { label: "Известность ÷2", icon: "fa-eye" },
+    "notoriety*2": { label: "Известность ×2", icon: "fa-eye" },
+    "notoriety+dangers": { label: "Известность + Опасность", icon: "fa-eye" },
+    "(notoriety+dangers)/2": { label: "(Известность + Опасность) ÷2", icon: "fa-eye" },
+    "(notoriety+dangers)*2": { label: "(Известность + Опасность) ×2", icon: "fa-eye" },
+    "dangers": { label: "Опасность", icon: "fa-skull-crossbones" },
+    "loyalty": { label: "Верность", icon: "fa-heart" },
+    "security": { label: "Безопасность", icon: "fa-shield-alt" },
+    "secrecy": { label: "Секретность", icon: "fa-user-secret" },
+};
+
+const D100_TYPES = new Set(["notoriety", "notoriety/2", "notoriety*2", "notoriety+dangers", "(notoriety+dangers)/2", "(notoriety+dangers)*2", "dangers"]);
+const D20_TYPES = new Set(["loyalty", "security", "secrecy"]);
+
+const STAT_CONFIG = {
+    "supporters": { label: "Сторонники", icon: "fa-users", emoji: "👥", addVerb: "Появляются новые сторонники", subVerb: "Уходят сторонники", unit: "" },
+    "notoriety": { label: "Известность", icon: "fa-eye", emoji: "⚠️", addVerb: "Известность увеличена", subVerb: "Известность падает", unit: "" },
+    "treasury": { label: "Казна", icon: "fa-coins", emoji: "💰", addVerb: "Казна пополнена", subVerb: "Казна истощается", unit: " зм" },
+};
+
+/**
+ * Create an enricher button pair (main action + chat send) with consistent styling.
+ */
+function createEnricherButton(mainClass, chatClass, icon, label, datasets) {
+    const container = document.createElement("span");
+    container.style.cssText = "display: inline-flex; align-items: center;";
+
+    const mainBtn = document.createElement("a");
+    mainBtn.classList.add(mainClass);
+    mainBtn.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
+    mainBtn.style.cssText = `
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px;
+        background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+        color: white; border-radius: 4px 0 0 4px; cursor: pointer;
+        font-size: 0.9em; text-decoration: none;
+        border: 1px solid #718096; border-right: none;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        line-height: 1; height: auto;
+    `;
+
+    const chatBtn = document.createElement("a");
+    chatBtn.classList.add(chatClass);
+    chatBtn.innerHTML = `<i class="fas fa-comment"></i>`;
+    chatBtn.title = "Отправить в чат";
+    chatBtn.style.cssText = `
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 2px 8px;
+        background: #718096; color: white;
+        border-radius: 0 4px 4px 0; cursor: pointer;
+        font-size: 0.9em; text-decoration: none;
+        border: 1px solid #718096; border-left: none;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        line-height: 1; height: auto;
+    `;
+
+    for (const [key, value] of Object.entries(datasets)) {
+        mainBtn.dataset[key] = value;
+        chatBtn.dataset[key] = value;
+    }
+
+    container.appendChild(mainBtn);
+    container.appendChild(chatBtn);
+    return container;
+}
+
+function getTypeLabel(typeExpr, dcParam) {
+    const cfg = TYPE_CONFIG[typeExpr];
+    if (!cfg) return typeExpr;
+    if (D20_TYPES.has(typeExpr) && dcParam) return `${cfg.label} КС ${dcParam}`;
+    return cfg.label;
+}
+
+function getTypeIcon(typeExpr) {
+    return TYPE_CONFIG[typeExpr]?.icon || "fa-dice-d20";
+}
+
+function getStatConfig(statType) {
+    return STAT_CONFIG[statType] || { label: statType, icon: "fa-dice", emoji: "🎲", addVerb: statType, subVerb: statType, unit: "" };
+}
+
+/**
+ * Build a styled result card for roll outcomes.
+ * @param {Object} opts
+ * @param {string} opts.icon - FontAwesome icon class (e.g. "fa-dice")
+ * @param {string} opts.title - Card title text
+ * @param {number|string} opts.result - Roll total to display
+ * @param {number|null} [opts.dc] - DC value (null = no DC comparison)
+ * @param {boolean|null} [opts.success] - true/false/null; if null, derived from result >= dc
+ * @param {string} [opts.extra] - Additional HTML to insert after result line
+ * @param {string} [opts.borderColor] - Override border color
+ * @param {string} [opts.background] - Override background gradient
+ * @returns {string} HTML string
+ */
+function buildResultCard({ icon = "fa-dice", title, result, dc = null, success = null, extra = "", borderColor = null, background = null }) {
+    if (success === null && dc != null) success = result >= dc;
+    const color = dc != null ? (success ? "#2e7d32" : "#c62828") : "#666";
+    const border = borderColor || (dc != null ? color : "#4a5568");
+    const bg = background || "linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)";
+    const successText = dc != null ? (success ? "✅ Успех!" : "❌ Провал!") : "";
+
+    return `
+        <div style="border: 2px solid ${border}; padding: 10px; border-radius: 8px; background: ${bg};">
+            <h4 style="margin: 0 0 8px 0; color: #2d3748;">
+                <i class="fas ${icon}"></i> ${title}
+            </h4>
+            <div style="font-size: 1.1em;">
+                <strong>Результат: ${result}</strong>
+                ${dc != null ? `<span style="color: #666;"> против КС ${dc}</span>` : ""}
+            </div>
+            ${extra}
+            ${successText ? `<div style="margin-top: 8px; font-weight: bold; color: ${color};">${successText}</div>` : ""}
+        </div>
+    `;
+}
+
+/**
+ * Build modifier breakdown HTML for roll results.
+ * @param {Array<{label: string, value: number}>} parts - Modifier parts
+ * @returns {string} HTML string or empty string
+ */
+function buildModifierBreakdown(parts) {
+    const visible = parts.filter(p => p.value !== 0);
+    if (visible.length === 0) return "";
+    const text = visible.map(p => `${p.label}: ${p.value > 0 ? '+' : ''}${p.value}`).join(", ");
+    return `<div style="font-size: 0.9em; color: #666; margin-top: 4px;">Модификаторы: ${text}</div>`;
+}
+
+/**
+ * Build a stat adjustment card with +/- buttons.
+ * @param {Object} statCfg - Config from getStatConfig()
+ * @param {number} result - Dice roll result value
+ * @param {string} statType - Stat key (e.g. "supporters")
+ * @returns {string} HTML string
+ */
+function buildStatAdjustCard(statCfg, result, statType) {
+    return `
+        <div style="border: 2px solid #667eea; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
+            <h5 style="margin: 0 0 8px 0; color: #2d3748; font-size: 1.1em;">
+                <i class="fas ${statCfg.icon}"></i> ${statCfg.label}: ${result}
+            </h5>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="rebellion-adjust-stat" 
+                        data-stat="${statType}" 
+                        data-value="${result}" 
+                        data-operation="add"
+                        style="background: #48bb78; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    <i class="fas fa-plus"></i> Добавить ${result}
+                </button>
+                <button class="rebellion-adjust-stat" 
+                        data-stat="${statType}" 
+                        data-value="${result}" 
+                        data-operation="subtract"
+                        style="background: #f56565; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    <i class="fas fa-minus"></i> Отнять ${result}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 
 /**
  * Get readable category name
@@ -16,15 +180,15 @@ function getCategoryLabel(category) {
  */
 function getManagerDisplayName(managerId) {
     if (!managerId) return "";
-    
+
     // Try to find actor by ID first
     const actor = game.actors.get(managerId);
     if (actor) return actor.name;
-    
+
     // Try to find ally by slug
     const allyData = getAllyData(managerId);
     if (allyData) return allyData.name;
-    
+
     // If it's already a name (not an ID), return as is
     return managerId;
 }
@@ -33,283 +197,47 @@ Hooks.once("init", () => {
 
     // Register @Rebellion enricher for inline check buttons
     CONFIG.TextEditor.enrichers.push({
-        // Pattern: @Rebellion[type:notoriety] @Rebellion[type:notoriety/2] @Rebellion[type:notoriety*2] 
-        // @Rebellion[type:notoriety+dangers] @Rebellion[type:dangers] 
-        // @Rebellion[type:loyalty|dc:10] @Rebellion[type:security|dc:15] @Rebellion[type:secrecy|dc:20]
         pattern: /@Rebellion\[type:([^\]|]+)(?:\|dc:(\d+))?\]/gi,
         enricher: (match, options) => {
-            const typeExpr = match[1]; // e.g. "notoriety", "notoriety/2", "notoriety+dangers", "loyalty"
-            const dcParam = match[2]; // e.g. "10" or undefined
-            
-            const a = document.createElement("a");
-            a.classList.add("rebellion-inline-check");
-            a.dataset.type = typeExpr;
-            if (dcParam) a.dataset.dc = dcParam;
-            
-            // Generate label based on type
-            let label = "";
-            let icon = "fa-dice-d20";
-            
-            if (typeExpr === "notoriety") {
-                label = "Известность";
-                icon = "fa-eye";
-            } else if (typeExpr === "notoriety/2") {
-                label = "Известность ÷2";
-                icon = "fa-eye";
-            } else if (typeExpr === "notoriety*2") {
-                label = "Известность ×2";
-                icon = "fa-eye";
-            } else if (typeExpr === "notoriety+dangers") {
-                label = "Известность + Опасность";
-                icon = "fa-eye";
-            } else if (typeExpr === "(notoriety+dangers)/2") {
-                label = "(Известность + Опасность) ÷2";
-                icon = "fa-eye";
-            } else if (typeExpr === "(notoriety+dangers)*2") {
-                label = "(Известность + Опасность) ×2";
-                icon = "fa-eye";
-            } else if (typeExpr === "dangers") {
-                label = "Опасность";
-                icon = "fa-skull-crossbones";
-            } else if (typeExpr === "loyalty") {
-                label = dcParam ? `Верность КС ${dcParam}` : "Верность";
-                icon = "fa-heart";
-            } else if (typeExpr === "security") {
-                label = dcParam ? `Безопасность КС ${dcParam}` : "Безопасность";
-                icon = "fa-shield-alt";
-            } else if (typeExpr === "secrecy") {
-                label = dcParam ? `Секретность КС ${dcParam}` : "Секретность";
-                icon = "fa-user-secret";
-            } else {
-                label = typeExpr;
-            }
-            
-            // Создаем контейнер для кнопки и кнопки отправки в чат
-            const container = document.createElement("span");
-            container.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-            `;
-            
-            // Основная кнопка броска
-            a.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
-            a.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 2px 8px;
-                background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-                color: white;
-                border-radius: 4px 0 0 4px;
-                cursor: pointer;
-                font-size: 0.9em;
-                text-decoration: none;
-                border: 1px solid #718096;
-                border-right: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                line-height: 1;
-                height: auto;
-            `;
-            
-            // Кнопка отправки в чат - простая иконка
-            const chatButton = document.createElement("a");
-            chatButton.classList.add("rebellion-chat-btn");
-            chatButton.dataset.type = typeExpr;
-            if (dcParam) chatButton.dataset.dc = dcParam;
-            chatButton.innerHTML = `<i class="fas fa-comment"></i>`;
-            chatButton.title = "Отправить в чат";
-            chatButton.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                padding: 2px 8px;
-                background: #718096;
-                color: white;
-                border-radius: 0 4px 4px 0;
-                cursor: pointer;
-                font-size: 0.9em;
-                text-decoration: none;
-                border: 1px solid #718096;
-                border-left: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                line-height: 1;
-                height: auto;
-            `;
-            
-            container.appendChild(a);
-            container.appendChild(chatButton);
-            
-            return container;
+            const typeExpr = match[1];
+            const dcParam = match[2];
+            const datasets = { type: typeExpr };
+            if (dcParam) datasets.dc = dcParam;
+            return createEnricherButton(
+                "rebellion-inline-check", "rebellion-chat-btn",
+                getTypeIcon(typeExpr), getTypeLabel(typeExpr, dcParam), datasets
+            );
         }
     });
 
     // Register @Rebellion[%] enricher for d100 rolls
-    // Patterns: @Rebellion[%], @Rebellion[%|dc:20], @Rebellion[%+danger], @Rebellion[%+danger|dc:20]
     CONFIG.TextEditor.enrichers.push({
         pattern: /@Rebellion\[%(\+danger)?(?:\|dc:(\d+))?\]/gi,
         enricher: (match, options) => {
-            const hasDanger = !!match[1]; // "+danger" or undefined
-            const dcParam = match[2]; // e.g. "20" or undefined
-            
-            const a = document.createElement("a");
-            a.classList.add("rebellion-percent-check");
-            a.dataset.hasDanger = hasDanger ? "true" : "false";
-            if (dcParam) a.dataset.dc = dcParam;
-            
-            // Generate label
-            let label = "";
-            const icon = "fa-percent";
-            
-            if (hasDanger) {
-                label = dcParam ? `d100 + Опасность КС ${dcParam}` : "d100 + Опасность";
-            } else {
-                label = dcParam ? `d100 КС ${dcParam}` : "d100";
-            }
-            
-            // Создаем контейнер для кнопки и кнопки отправки в чат
-            const container = document.createElement("span");
-            container.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-            `;
-            
-            // Основная кнопка броска
-            a.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
-            a.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 2px 8px;
-                background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-                color: white;
-                border-radius: 4px 0 0 4px;
-                cursor: pointer;
-                font-size: 0.9em;
-                text-decoration: none;
-                border: 1px solid #718096;
-                border-right: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                line-height: 1;
-                height: auto;
-            `;
-            
-            // Кнопка отправки в чат
-            const chatButton = document.createElement("a");
-            chatButton.classList.add("rebellion-percent-chat-btn");
-            chatButton.dataset.hasDanger = hasDanger ? "true" : "false";
-            if (dcParam) chatButton.dataset.dc = dcParam;
-            chatButton.innerHTML = `<i class="fas fa-comment"></i>`;
-            chatButton.title = "Отправить в чат";
-            chatButton.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                padding: 2px 8px;
-                background: #718096;
-                color: white;
-                border-radius: 0 4px 4px 0;
-                cursor: pointer;
-                font-size: 0.9em;
-                text-decoration: none;
-                border: 1px solid #718096;
-                border-left: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                line-height: 1;
-                height: auto;
-            `;
-            
-            container.appendChild(a);
-            container.appendChild(chatButton);
-            
-            return container;
+            const hasDanger = !!match[1];
+            const dcParam = match[2];
+            let label = hasDanger ? "d100 + Опасность" : "d100";
+            if (dcParam) label += ` КС ${dcParam}`;
+            const datasets = { hasDanger: hasDanger ? "true" : "false" };
+            if (dcParam) datasets.dc = dcParam;
+            return createEnricherButton(
+                "rebellion-percent-check", "rebellion-percent-chat-btn",
+                "fa-percent", label, datasets
+            );
         }
     });
 
-    // Register @Rebellion[(1d6)[supporters]] enricher for dice rolls with adjustment buttons
-    // Patterns: @Rebellion[(1d6)[supporters]], @Rebellion[(1d6)[notoriety]], @Rebellion[(1d6)[treasury]]
+    // Register @Rebellion[(1d6)[supporters]] enricher for dice rolls
     CONFIG.TextEditor.enrichers.push({
         pattern: /@Rebellion\[\(([^)]+)\)\[([^\]]+)\]\]/gi,
         enricher: (match, options) => {
-            const diceExpr = match[1]; // e.g. "1d6"
-            const statType = match[2]; // e.g. "supporters", "notoriety", "treasury"
-            
-            const a = document.createElement("a");
-            a.classList.add("rebellion-dice-roll");
-            a.dataset.dice = diceExpr;
-            a.dataset.stat = statType;
-            
-            let label = "";
-            let icon = "fa-dice";
-            
-            if (statType === "supporters") {
-                label = `${diceExpr} Сторонники`;
-                icon = "fa-users";
-            } else if (statType === "notoriety") {
-                label = `${diceExpr} Известность`;
-                icon = "fa-eye";
-            } else if (statType === "treasury") {
-                label = `${diceExpr} Казна`;
-                icon = "fa-coins";
-            } else {
-                label = `${diceExpr} ${statType}`;
-            }
-            
-            // Создаем контейнер для кнопки и кнопки отправки в чат
-            const container = document.createElement("span");
-            container.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-            `;
-            
-            // Основная кнопка броска
-            a.innerHTML = `<i class="fas ${icon}"></i> ${label}`;
-            a.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 2px 8px;
-                background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-                color: white;
-                border-radius: 4px 0 0 4px;
-                cursor: pointer;
-                font-size: 0.9em;
-                text-decoration: none;
-                border: 1px solid #718096;
-                border-right: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                line-height: 1;
-                height: auto;
-            `;
-            
-            // Кнопка отправки в чат
-            const chatButton = document.createElement("a");
-            chatButton.classList.add("rebellion-dice-chat-btn");
-            chatButton.dataset.dice = diceExpr;
-            chatButton.dataset.stat = statType;
-            chatButton.innerHTML = `<i class="fas fa-comment"></i>`;
-            chatButton.title = "Отправить в чат";
-            chatButton.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                padding: 2px 8px;
-                background: #718096;
-                color: white;
-                border-radius: 0 4px 4px 0;
-                cursor: pointer;
-                font-size: 0.9em;
-                text-decoration: none;
-                border: 1px solid #718096;
-                border-left: none;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                line-height: 1;
-                height: auto;
-            `;
-            
-            container.appendChild(a);
-            container.appendChild(chatButton);
-            
-            return container;
+            const diceExpr = match[1];
+            const statType = match[2];
+            const cfg = getStatConfig(statType);
+            return createEnricherButton(
+                "rebellion-dice-roll", "rebellion-dice-chat-btn",
+                cfg.icon, `${diceExpr} ${cfg.label}`, { dice: diceExpr, stat: statType }
+            );
         }
     });
 
@@ -335,171 +263,135 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", () => {
     console.log("Rebellion: Module ready, setting up reroll integration");
+    const EVENT_REROLL_WINDOW_MS = 15000;
+
+    /**
+     * Shared d100 roll with dialog for manual modifier input.
+     * @param {Object} opts
+     * @param {string} opts.title - Dialog & card title (e.g. "Известность")
+     * @param {number} opts.baseMod - Base modifier added to the roll (e.g. checkBonus.total or danger)
+     * @param {number|null} opts.dc - DC to compare against (null = no comparison)
+     * @param {string} [opts.icon] - Card icon (default "fa-dice")
+     * @param {Array<{label:string,value:number}>} [opts.dialogInfoLines] - Extra info lines in dialog
+     * @param {Array<{label:string}>} [opts.modLabels] - Labels for [baseMod, manualMod] in breakdown
+     * @param {Object|null} [opts.chatFlags] - Extra flags for the roll ChatMessage
+     * @param {string|null} [opts.borderColor] - Override card border when no DC
+     */
+    async function rollD100WithDialog({ title, baseMod = 0, dc = null, icon = "fa-dice", dialogInfoLines = [], modLabels = ["Бонус", "Ручной"], chatFlags = null, borderColor = null }) {
+        const dialogInfoHtml = dialogInfoLines
+            .map(line => `<div class="form-group"><label>${line.label}: ${line.value}</label></div>`)
+            .join("");
+
+        let modifier = await Dialog.prompt({
+            title: `Бросок: ${title}`,
+            content: `
+                <form>
+                    <div class="form-group">
+                        <label>Модификатор:</label>
+                        <div class="form-fields">
+                            <input type="number" value="0" />
+                        </div>
+                    </div>
+                    ${dialogInfoHtml}
+                    ${dc ? `<div class="form-group"><label>КС: ${dc}</label></div>` : ""}
+                </form>
+            `,
+            callback: html => html.find('input').val(),
+            close: () => null,
+            rejectClose: false
+        });
+
+        if (modifier === null) return;
+
+        const manualModifier = parseInt(modifier || 0);
+        const totalModifier = manualModifier + baseMod;
+        const roll = await new Roll(`1d100 + ${totalModifier}`).roll({ async: true });
+        const total = roll.total;
+
+        const rollMsgData = {
+            roll: roll,
+            content: await roll.render(),
+            sound: CONFIG.sounds.dice,
+            type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+            speaker: ChatMessage.getSpeaker()
+        };
+        if (chatFlags) rollMsgData.flags = chatFlags;
+        await ChatMessage.create(rollMsgData);
+
+        const modBreakdown = buildModifierBreakdown([
+            { label: modLabels[0], value: baseMod },
+            { label: modLabels[1], value: manualModifier }
+        ]);
+        const resultMessage = buildResultCard({
+            icon,
+            title,
+            result: total,
+            dc,
+            success: dc ? total >= dc : null,
+            extra: modBreakdown,
+            borderColor: !dc ? (borderColor || null) : null
+        });
+
+        await ChatMessage.create({
+            content: resultMessage,
+            speaker: ChatMessage.getSpeaker()
+        });
+    }
 
     // Function to perform rebellion roll
     async function performRebellionRoll(typeExpr, dcParam, ev) {
         const data = DataHandler.get();
         const bonuses = DataHandler.getRollBonuses(data);
-        
+
         let checkType = null;
         let dc = dcParam;
         let checkLabel = "";
-        
-        // Parse type expression
-        if (typeExpr === "notoriety") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
-            dc = data.notoriety || 0;
-            checkLabel = `Известность (КС ${dc})`;
-        } else if (typeExpr === "notoriety/2") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
-            dc = Math.floor((data.notoriety || 0) / 2);
-            checkLabel = `Известность ÷2 (КС ${dc})`;
-        } else if (typeExpr === "notoriety*2") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
-            dc = (data.notoriety || 0) * 2;
-            checkLabel = `Известность ×2 (КС ${dc})`;
-        } else if (typeExpr === "notoriety+dangers") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
+
+        // Parse type expression - using centralized config
+        const isD100Check = D100_TYPES.has(typeExpr);
+        const isD20Check = D20_TYPES.has(typeExpr);
+
+        if (isD100Check) {
+            checkType = null;
             const effectiveDanger = DataHandler.getEffectiveDanger(data);
-            dc = (data.notoriety || 0) + effectiveDanger;
-            checkLabel = `Известность + Опасность (КС ${dc})`;
-        } else if (typeExpr === "(notoriety+dangers)/2") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
-            const effectiveDanger = DataHandler.getEffectiveDanger(data);
-            dc = Math.floor(((data.notoriety || 0) + effectiveDanger) / 2);
-            checkLabel = `(Известность + Опасность) ÷2 (КС ${dc})`;
-        } else if (typeExpr === "(notoriety+dangers)*2") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
-            const effectiveDanger = DataHandler.getEffectiveDanger(data);
-            dc = ((data.notoriety || 0) + effectiveDanger) * 2;
-            checkLabel = `(Известность + Опасность) ×2 (КС ${dc})`;
-        } else if (typeExpr === "dangers") {
-            checkType = null; // Простой d100 бросок без модификаторов восстания
-            dc = DataHandler.getEffectiveDanger(data);
-            checkLabel = `Опасность (КС ${dc})`;
-        } else if (typeExpr === "loyalty") {
-            checkType = "loyalty";
-            checkLabel = dc ? `Верность (КС ${dc})` : "Верность";
-        } else if (typeExpr === "security") {
-            checkType = "security";
-            checkLabel = dc ? `Безопасность (КС ${dc})` : "Безопасность";
-        } else if (typeExpr === "secrecy") {
-            checkType = "secrecy";
-            checkLabel = dc ? `Секретность (КС ${dc})` : "Секретность";
+            const dcCalc = {
+                "notoriety": () => data.notoriety || 0,
+                "notoriety/2": () => Math.floor((data.notoriety || 0) / 2),
+                "notoriety*2": () => (data.notoriety || 0) * 2,
+                "notoriety+dangers": () => (data.notoriety || 0) + effectiveDanger,
+                "(notoriety+dangers)/2": () => Math.floor(((data.notoriety || 0) + effectiveDanger) / 2),
+                "(notoriety+dangers)*2": () => ((data.notoriety || 0) + effectiveDanger) * 2,
+                "dangers": () => effectiveDanger,
+            };
+            dc = dcCalc[typeExpr]?.() ?? 0;
+            const typeCfg = TYPE_CONFIG[typeExpr] || { label: typeExpr };
+            checkLabel = `${typeCfg.label} (КС ${dc})`;
+        } else if (isD20Check) {
+            checkType = typeExpr;
+            const typeCfg = TYPE_CONFIG[typeExpr] || { label: typeExpr };
+            checkLabel = dc ? `${typeCfg.label} (КС ${dc})` : typeCfg.label;
         }
-        
-        // Check if this is a d100 check (notoriety/danger related)
-        const isD100Check = (typeExpr === "notoriety" || typeExpr === "notoriety/2" || typeExpr === "notoriety*2" || typeExpr === "notoriety+dangers" || typeExpr === "(notoriety+dangers)/2" || typeExpr === "(notoriety+dangers)*2" || typeExpr === "dangers");
-        
+
+
         if (!checkType && !isD100Check) {
             ui.notifications.error(`Неизвестный тип проверки: ${typeExpr}`);
             return;
         }
-        
+
         // For notoriety checks, use empty bonus (no rebellion modifiers)
         const checkBonus = checkType ? bonuses[checkType] : { total: 0, parts: [] };
-        
+
         if (isD100Check) {
-            // Create dialog title without DC
-            let dialogTitle = "";
-            if (typeExpr === "notoriety") {
-                dialogTitle = "Бросок: Известность";
-            } else if (typeExpr === "notoriety/2") {
-                dialogTitle = "Бросок: Известность ÷2";
-            } else if (typeExpr === "notoriety*2") {
-                dialogTitle = "Бросок: Известность ×2";
-            } else if (typeExpr === "notoriety+dangers") {
-                dialogTitle = "Бросок: Известность + Опасность";
-            } else if (typeExpr === "(notoriety+dangers)/2") {
-                dialogTitle = "Бросок: (Известность + Опасность) ÷2";
-            } else if (typeExpr === "(notoriety+dangers)*2") {
-                dialogTitle = "Бросок: (Известность + Опасность) ×2";
-            } else if (typeExpr === "dangers") {
-                dialogTitle = "Бросок: Опасность";
-            }
-            
-            // Show dialog to get modifier for d100 checks
-            let modifier = await Dialog.prompt({
-                title: dialogTitle,
-                content: `
-                    <form>
-                        <div class="form-group">
-                            <label>Модификатор:</label>
-                            <div class="form-fields">
-                                <input type="number" value="0" />
-                            </div>
-                        </div>
-                        ${dc ? `<div class="form-group"><label>КС: ${dc}</label></div>` : ""}
-                    </form>
-                `,
-                callback: html => html.find('input').val(),
-                close: () => null,
-                rejectClose: false
+            const typeCfg = TYPE_CONFIG[typeExpr] || { label: typeExpr };
+            await rollD100WithDialog({
+                title: typeCfg.label,
+                baseMod: checkBonus.total,
+                dc,
+                icon: "fa-dice",
+                modLabels: ["Восстание", "Ручной"],
+                chatFlags: { pf2e: { context: { type: "skill-check", skill: checkType, action: checkType } } }
             });
-            
-            if (modifier !== null) {
-                const manualModifier = parseInt(modifier || 0);
-                const totalModifier = manualModifier + checkBonus.total;
-                const roll = await new Roll(`1d100 + ${totalModifier}`).roll({ async: true });
-                const total = roll.total;
-                
-                let resultText = "";
-                let resultColor = "#666";
-                if (dc) {
-                    const success = total >= dc;
-                    resultText = success ? "✅ Успех!" : "❌ Провал!";
-                    resultColor = success ? "#2e7d32" : "#c62828";
-                }
-                
-                await ChatMessage.create({
-                    roll: roll,
-                    content: await roll.render(),
-                    sound: CONFIG.sounds.dice,
-                    type: CONST.CHAT_MESSAGE_TYPES.ROLL,
-                    speaker: ChatMessage.getSpeaker(),
-                    flags: {
-                        pf2e: {
-                            context: {
-                                type: "skill-check",
-                                skill: checkType,
-                                action: checkType
-                            }
-                        }
-                    }
-                });
-                
-                // Create result message
-                let modifierBreakdown = "";
-                if (manualModifier !== 0) {
-                    modifierBreakdown = `<div style="font-size: 0.9em; color: #666; margin-top: 4px;">Модификатор: ${manualModifier > 0 ? '+' : ''}${manualModifier}</div>`;
-                } else if (checkBonus.total !== 0) {
-                    // Only show rebellion bonus if it's not a notoriety check
-                    const parts = [];
-                    if (checkBonus.total !== 0) parts.push(`Восстание: ${checkBonus.total > 0 ? '+' : ''}${checkBonus.total}`);
-                    if (manualModifier !== 0) parts.push(`Ручной: ${manualModifier > 0 ? '+' : ''}${manualModifier}`);
-                    modifierBreakdown = `<div style="font-size: 0.9em; color: #666; margin-top: 4px;">Модификаторы: ${parts.join(', ')}</div>`;
-                }
-                
-                const resultMessage = `
-                    <div style="border: 2px solid ${resultColor}; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
-                        <h4 style="margin: 0 0 8px 0; color: #2d3748;">
-                            <i class="fas fa-dice"></i> ${dialogTitle.replace("Бросок: ", "")}
-                        </h4>
-                        <div style="font-size: 1.1em;">
-                            <strong>Результат: ${total}</strong>
-                            ${dc ? `<span style="color: #666;"> против КС ${dc}</span>` : ""}
-                        </div>
-                        ${modifierBreakdown}
-                        ${resultText ? `<div style="margin-top: 8px; font-weight: bold; color: ${resultColor};">${resultText}</div>` : ""}
-                    </div>
-                `;
-                
-                await ChatMessage.create({
-                    content: resultMessage,
-                    speaker: ChatMessage.getSpeaker()
-                });
-            }
-            
+
         } else if (game.pf2e && game.pf2e.Check && game.pf2e.Modifier && game.pf2e.CheckModifier) {
             // Use PF2e System Roll for other checks (d20)
             const modifiers = checkBonus.parts.map(p => new game.pf2e.Modifier({
@@ -507,9 +399,9 @@ Hooks.once("ready", () => {
                 modifier: p.value,
                 type: "untyped"
             }));
-            
+
             const actor = game.user.character || game.actors.find(a => a.hasPlayerOwner && a.type === "character");
-            
+
             // Set state for result handling
             game.rebellionState = {
                 isRebellionInlineCheck: true,
@@ -518,7 +410,7 @@ Hooks.once("ready", () => {
                 dc,
                 timestamp: Date.now()
             };
-            
+
             await game.pf2e.Check.roll(
                 new game.pf2e.CheckModifier(checkLabel, { modifiers }),
                 {
@@ -535,28 +427,14 @@ Hooks.once("ready", () => {
             const roll = new Roll("1d20");
             await roll.evaluate();
             const total = roll.total + checkBonus.total;
-            
-            let resultText = "";
-            let resultColor = "#666";
-            if (dc) {
-                const success = total >= dc;
-                resultText = success ? "✅ Успех!" : "❌ Провал!";
-                resultColor = success ? "#2e7d32" : "#c62828";
-            }
-            
-            const message = `
-                <div style="border: 2px solid #4a5568; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
-                    <h4 style="margin: 0 0 8px 0; color: #2d3748;">
-                        <i class="fas fa-dice-d20"></i> ${checkLabel}
-                    </h4>
-                    <div style="font-size: 1.1em;">
-                        <strong>1d20 (${roll.total}) + ${checkBonus.total} = ${total}</strong>
-                        ${dc ? `<span style="color: #666;"> против КС ${dc}</span>` : ""}
-                    </div>
-                    ${resultText ? `<div style="margin-top: 8px; font-weight: bold; color: ${resultColor};">${resultText}</div>` : ""}
-                </div>
-            `;
-            
+
+            const message = buildResultCard({
+                icon: "fa-dice-d20",
+                title: checkLabel,
+                result: total, dc,
+                extra: `<div style="font-size: 0.9em; color: #666; margin-top: 4px;">1d20 (${roll.total}) + ${checkBonus.total} = ${total}</div>`
+            });
+
             await ChatMessage.create({
                 content: message,
                 speaker: ChatMessage.getSpeaker(),
@@ -577,37 +455,13 @@ Hooks.once("ready", () => {
     $(document).on('click', '.rebellion-chat-btn', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        
+
         const target = ev.currentTarget;
         const typeExpr = target.dataset.type;
         const dcParam = target.dataset.dc ? parseInt(target.dataset.dc) : null;
-        
-        // Get button text for chat
-        let buttonText = "";
-        if (typeExpr === "notoriety") {
-            buttonText = "Известность";
-        } else if (typeExpr === "notoriety/2") {
-            buttonText = "Известность ÷2";
-        } else if (typeExpr === "notoriety*2") {
-            buttonText = "Известность ×2";
-        } else if (typeExpr === "notoriety+dangers") {
-            buttonText = "Известность + Опасность";
-        } else if (typeExpr === "(notoriety+dangers)/2") {
-            buttonText = "(Известность + Опасность) ÷2";
-        } else if (typeExpr === "(notoriety+dangers)*2") {
-            buttonText = "(Известность + Опасность) ×2";
-        } else if (typeExpr === "dangers") {
-            buttonText = "Опасность";
-        } else if (typeExpr === "loyalty") {
-            buttonText = "Верность";
-        } else if (typeExpr === "security") {
-            buttonText = "Безопасность";
-        } else if (typeExpr === "secrecy") {
-            buttonText = "Секретность";
-        } else {
-            buttonText = typeExpr;
-        }
-        
+
+        const buttonText = getTypeLabel(typeExpr, dcParam);
+
         // Create simple button in chat
         const chatContent = `
             <button class="rebellion-roll-from-chat" 
@@ -617,7 +471,7 @@ Hooks.once("ready", () => {
                 ${buttonText}
             </button>
         `;
-        
+
         await ChatMessage.create({
             content: chatContent,
             speaker: ChatMessage.getSpeaker()
@@ -627,14 +481,14 @@ Hooks.once("ready", () => {
     // Global listener for roll buttons from chat
     $(document).on('click', '.rebellion-roll-from-chat', async (ev) => {
         ev.preventDefault();
-        
+
         const button = ev.currentTarget;
         const typeExpr = button.dataset.type;
         const dcParam = button.dataset.dc ? parseInt(button.dataset.dc) : null;
-        
+
         // Use the same function as the main button
         await performRebellionRoll(typeExpr, dcParam, ev);
-        
+
         // Disable button after use
         button.disabled = true;
         button.style.opacity = '0.5';
@@ -645,11 +499,11 @@ Hooks.once("ready", () => {
     $(document).on('click', '.rebellion-inline-check', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        
+
         const target = ev.currentTarget;
         const typeExpr = target.dataset.type;
         const dcParam = target.dataset.dc ? parseInt(target.dataset.dc) : null;
-        
+
         // Use the same function as chat buttons
         await performRebellionRoll(typeExpr, dcParam, ev);
     });
@@ -658,91 +512,28 @@ Hooks.once("ready", () => {
     async function performPercentRoll(hasDanger, dcParam) {
         const data = DataHandler.get();
         const effectiveDanger = hasDanger ? DataHandler.getEffectiveDanger(data) : 0;
-        
-        const dialogTitle = hasDanger ? "Бросок: d100 + Опасность" : "Бросок: d100";
-        
-        // Show dialog to get modifier
-        let modifier = await Dialog.prompt({
-            title: dialogTitle,
-            content: `
-                <form>
-                    <div class="form-group">
-                        <label>Модификатор:</label>
-                        <div class="form-fields">
-                            <input type="number" value="0" />
-                        </div>
-                    </div>
-                    ${hasDanger ? `<div class="form-group"><label>Опасность: ${effectiveDanger}</label></div>` : ""}
-                    ${dcParam ? `<div class="form-group"><label>КС: ${dcParam}</label></div>` : ""}
-                </form>
-            `,
-            callback: html => html.find('input').val(),
-            close: () => null,
-            rejectClose: false
+        const labelText = hasDanger ? "d100 + Опасность" : "d100";
+
+        await rollD100WithDialog({
+            title: labelText,
+            baseMod: effectiveDanger,
+            dc: dcParam,
+            icon: "fa-percent",
+            dialogInfoLines: hasDanger ? [{ label: "Опасность", value: effectiveDanger }] : [],
+            modLabels: ["Опасность", "Ручной"],
+            borderColor: '#6b46c1'
         });
-        
-        if (modifier !== null) {
-            const manualModifier = parseInt(modifier || 0);
-            const totalModifier = manualModifier + effectiveDanger;
-            const roll = await new Roll(`1d100 + ${totalModifier}`).roll({ async: true });
-            const total = roll.total;
-            
-            let resultText = "";
-            let resultColor = "#666";
-            if (dcParam) {
-                const success = total < dcParam; // Меньше DC = провал для % бросков
-                resultText = success ? "❌ Провал!" : "✅ Успех!";
-                resultColor = success ? "#c62828" : "#2e7d32";
-            }
-            
-            await ChatMessage.create({
-                roll: roll,
-                content: await roll.render(),
-                sound: CONFIG.sounds.dice,
-                type: CONST.CHAT_MESSAGE_TYPES.ROLL,
-                speaker: ChatMessage.getSpeaker()
-            });
-            
-            // Create result message
-            let modifierBreakdown = "";
-            if (effectiveDanger !== 0 || manualModifier !== 0) {
-                const parts = [];
-                if (effectiveDanger !== 0) parts.push(`Опасность: ${effectiveDanger > 0 ? '+' : ''}${effectiveDanger}`);
-                if (manualModifier !== 0) parts.push(`Ручной: ${manualModifier > 0 ? '+' : ''}${manualModifier}`);
-                modifierBreakdown = `<div style="font-size: 0.9em; color: #666; margin-top: 4px;">Модификаторы: ${parts.join(', ')}</div>`;
-            }
-            
-            const labelText = hasDanger ? "d100 + Опасность" : "d100";
-            const resultMessage = `
-                <div style="border: 2px solid ${dcParam ? resultColor : '#6b46c1'}; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
-                    <h4 style="margin: 0 0 8px 0; color: #2d3748;">
-                        <i class="fas fa-percent"></i> ${labelText}
-                    </h4>
-                    <div style="font-size: 1.1em;">
-                        <strong>Результат: ${total}</strong>
-                        ${dcParam ? `<span style="color: #666;"> против КС ${dcParam}</span>` : ""}
-                    </div>
-                    ${modifierBreakdown}
-                    ${resultText ? `<div style="margin-top: 8px; font-weight: bold; color: ${resultColor};">${resultText}</div>` : ""}
-                </div>
-            `;
-            
-            await ChatMessage.create({
-                content: resultMessage,
-                speaker: ChatMessage.getSpeaker()
-            });
-        }
     }
 
     // Global listener for @Rebellion[%] inline check buttons
     $(document).on('click', '.rebellion-percent-check', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        
+
         const target = ev.currentTarget;
         const hasDanger = target.dataset.hasDanger === "true";
         const dcParam = target.dataset.dc ? parseInt(target.dataset.dc) : null;
-        
+
         await performPercentRoll(hasDanger, dcParam);
     });
 
@@ -750,15 +541,15 @@ Hooks.once("ready", () => {
     $(document).on('click', '.rebellion-percent-chat-btn', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        
+
         const target = ev.currentTarget;
         const hasDanger = target.dataset.hasDanger === "true";
         const dcParam = target.dataset.dc ? parseInt(target.dataset.dc) : null;
-        
+
         // Get button text for chat
         let buttonText = hasDanger ? "d100 + Опасность" : "d100";
         if (dcParam) buttonText += ` КС ${dcParam}`;
-        
+
         // Create button in chat
         const chatContent = `
             <button class="rebellion-percent-roll-from-chat" 
@@ -768,7 +559,7 @@ Hooks.once("ready", () => {
                 <i class="fas fa-percent"></i> ${buttonText}
             </button>
         `;
-        
+
         await ChatMessage.create({
             content: chatContent,
             speaker: ChatMessage.getSpeaker()
@@ -778,48 +569,36 @@ Hooks.once("ready", () => {
     // Global listener for percent roll buttons from chat
     $(document).on('click', '.rebellion-percent-roll-from-chat', async (ev) => {
         ev.preventDefault();
-        
+
         const button = ev.currentTarget;
         const hasDanger = button.dataset.hasDanger === "true";
         const dcParam = button.dataset.dc ? parseInt(button.dataset.dc) : null;
-        
+
         await performPercentRoll(hasDanger, dcParam);
-        
+
         // Disable button after use
         button.disabled = true;
         button.style.opacity = '0.5';
         button.innerHTML = '<i class="fas fa-check"></i> Выполнено';
     });
-    
+
     // Global listener for @Rebellion dice roll buttons
     $(document).on('click', '.rebellion-dice-roll', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        
+
         const target = ev.currentTarget;
         const diceExpr = target.dataset.dice;
         const statType = target.dataset.stat;
-        
+
         // Perform the dice roll
         const roll = await new Roll(diceExpr).roll({ async: true });
         const result = roll.total;
-        
-        let statLabel = "";
-        let icon = "fa-dice";
-        
-        if (statType === "supporters") {
-            statLabel = "Сторонники";
-            icon = "fa-users";
-        } else if (statType === "notoriety") {
-            statLabel = "Известность";
-            icon = "fa-eye";
-        } else if (statType === "treasury") {
-            statLabel = "Казна";
-            icon = "fa-coins";
-        } else {
-            statLabel = statType;
-        }
-        
+
+        const statCfg = getStatConfig(statType);
+        const statLabel = statCfg.label;
+        const icon = statCfg.icon;
+
         // Create chat message with roll and adjustment buttons
         await ChatMessage.create({
             roll: roll,
@@ -828,32 +607,10 @@ Hooks.once("ready", () => {
             type: CONST.CHAT_MESSAGE_TYPES.ROLL,
             speaker: ChatMessage.getSpeaker()
         });
-        
+
         // Create result message with adjustment buttons
-        const resultMessage = `
-            <div style="border: 2px solid #667eea; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
-                <h5 style="margin: 0 0 8px 0; color: #2d3748; font-size: 1.1em;">
-                    <i class="fas ${icon}"></i> ${statLabel}: ${result}
-                </h5>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button class="rebellion-adjust-stat" 
-                            data-stat="${statType}" 
-                            data-value="${result}" 
-                            data-operation="add"
-                            style="background: #48bb78; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                        <i class="fas fa-plus"></i> Добавить ${result}
-                    </button>
-                    <button class="rebellion-adjust-stat" 
-                            data-stat="${statType}" 
-                            data-value="${result}" 
-                            data-operation="subtract"
-                            style="background: #f56565; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                        <i class="fas fa-minus"></i> Отнять ${result}
-                    </button>
-                </div>
-            </div>
-        `;
-        
+        const resultMessage = buildStatAdjustCard(statCfg, result, statType);
+
         await ChatMessage.create({
             content: resultMessage,
             speaker: ChatMessage.getSpeaker()
@@ -864,27 +621,15 @@ Hooks.once("ready", () => {
     $(document).on('click', '.rebellion-dice-chat-btn', async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        
+
         const target = ev.currentTarget;
         const diceExpr = target.dataset.dice;
         const statType = target.dataset.stat;
-        
-        let statLabel = "";
-        let icon = "fa-dice";
-        
-        if (statType === "supporters") {
-            statLabel = "Сторонники";
-            icon = "fa-users";
-        } else if (statType === "notoriety") {
-            statLabel = "Известность";
-            icon = "fa-eye";
-        } else if (statType === "treasury") {
-            statLabel = "Казна";
-            icon = "fa-coins";
-        } else {
-            statLabel = statType;
-        }
-        
+
+        const statCfg = getStatConfig(statType);
+        const statLabel = statCfg.label;
+        const icon = statCfg.icon;
+
         // Create button in chat
         const chatContent = `
             <button class="rebellion-dice-roll-from-chat" 
@@ -894,7 +639,7 @@ Hooks.once("ready", () => {
                 <i class="fas ${icon}"></i> ${diceExpr} ${statLabel}
             </button>
         `;
-        
+
         await ChatMessage.create({
             content: chatContent,
             speaker: ChatMessage.getSpeaker()
@@ -904,31 +649,19 @@ Hooks.once("ready", () => {
     // Global listener for dice roll buttons from chat
     $(document).on('click', '.rebellion-dice-roll-from-chat', async (ev) => {
         ev.preventDefault();
-        
+
         const button = ev.currentTarget;
         const diceExpr = button.dataset.dice;
         const statType = button.dataset.stat;
-        
+
         // Perform the dice roll directly (same logic as main handler)
         const roll = await new Roll(diceExpr).roll({ async: true });
         const result = roll.total;
-        
-        let statLabel = "";
-        let icon = "fa-dice";
-        
-        if (statType === "supporters") {
-            statLabel = "Сторонники";
-            icon = "fa-users";
-        } else if (statType === "notoriety") {
-            statLabel = "Известность";
-            icon = "fa-eye";
-        } else if (statType === "treasury") {
-            statLabel = "Казна";
-            icon = "fa-coins";
-        } else {
-            statLabel = statType;
-        }
-        
+
+        const statCfg = getStatConfig(statType);
+        const statLabel = statCfg.label;
+        const icon = statCfg.icon;
+
         // Create chat message with roll and adjustment buttons
         await ChatMessage.create({
             roll: roll,
@@ -937,37 +670,15 @@ Hooks.once("ready", () => {
             type: CONST.CHAT_MESSAGE_TYPES.ROLL,
             speaker: ChatMessage.getSpeaker()
         });
-        
+
         // Create result message with adjustment buttons
-        const resultMessage = `
-            <div style="border: 2px solid #667eea; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
-                <h5 style="margin: 0 0 8px 0; color: #2d3748; font-size: 1.1em;">
-                    <i class="fas ${icon}"></i> ${statLabel}: ${result}
-                </h5>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button class="rebellion-adjust-stat" 
-                            data-stat="${statType}" 
-                            data-value="${result}" 
-                            data-operation="add"
-                            style="background: #48bb78; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                        <i class="fas fa-plus"></i> Добавить ${result}
-                    </button>
-                    <button class="rebellion-adjust-stat" 
-                            data-stat="${statType}" 
-                            data-value="${result}" 
-                            data-operation="subtract"
-                            style="background: #f56565; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                        <i class="fas fa-minus"></i> Отнять ${result}
-                    </button>
-                </div>
-            </div>
-        `;
-        
+        const resultMessage = buildStatAdjustCard(statCfg, result, statType);
+
         await ChatMessage.create({
             content: resultMessage,
             speaker: ChatMessage.getSpeaker()
         });
-        
+
         // Disable button after use
         button.disabled = true;
         button.style.opacity = '0.5';
@@ -977,80 +688,39 @@ Hooks.once("ready", () => {
     // Global listener for stat adjustment buttons
     $(document).on('click', '.rebellion-adjust-stat', async (ev) => {
         ev.preventDefault();
-        
+
         const button = ev.currentTarget;
         const statType = button.dataset.stat;
         const value = parseInt(button.dataset.value);
         const operation = button.dataset.operation;
-        
+
         const data = DataHandler.get();
         let oldValue, newValue;
         let updateData = {};
-        
-        if (statType === "supporters") {
-            oldValue = data.supporters;
-            newValue = operation === "add" ? data.supporters + value : Math.max(0, data.supporters - value);
-            updateData.supporters = newValue;
-        } else if (statType === "notoriety") {
-            oldValue = data.notoriety;
-            newValue = operation === "add" ? Math.min(100, data.notoriety + value) : Math.max(0, data.notoriety - value);
-            updateData.notoriety = newValue;
-        } else if (statType === "treasury") {
-            oldValue = data.treasury;
-            newValue = operation === "add" ? data.treasury + value : Math.max(0, data.treasury - value);
-            updateData.treasury = newValue;
-        }
-        
+
+        const statCfgAdj = getStatConfig(statType);
+        oldValue = data[statType] ?? 0;
+        const maxVal = statType === "notoriety" ? 100 : Infinity;
+        newValue = operation === "add" ? Math.min(maxVal, oldValue + value) : Math.max(0, oldValue - value);
+        updateData[statType] = newValue;
+
         await DataHandler.update(updateData);
-        
+
         // Log the change to phase report and chat
-        let logMessage = "";
-        let notificationText = "";
-        
-        if (statType === "supporters") {
-            if (operation === "add") {
-                logMessage = `Появляются новые сторонники (+${value}): ${oldValue} → ${newValue}`;
-                notificationText = `Появляются новые сторонники (+${value}). Новое значение: ${newValue}`;
-            } else {
-                logMessage = `Уходят сторонники (-${value}): ${oldValue} → ${newValue}`;
-                notificationText = `Уходят сторонники (-${value}). Новое значение: ${newValue}`;
-            }
-        } else if (statType === "notoriety") {
-            if (operation === "add") {
-                logMessage = `Известность увеличена (+${value}): ${oldValue} → ${newValue}`;
-                notificationText = `Известность увеличена (+${value}). Новое значение: ${newValue}`;
-            } else {
-                logMessage = `Известность падает (-${value}): ${oldValue} → ${newValue}`;
-                notificationText = `Известность падает (-${value}). Новое значение: ${newValue}`;
-            }
-        } else if (statType === "treasury") {
-            if (operation === "add") {
-                logMessage = `Казна пополнена (+${value} зм): ${oldValue} → ${newValue}`;
-                notificationText = `Казна пополнена (+${value} зм). Новое значение: ${newValue}`;
-            } else {
-                logMessage = `Казна истощается (-${value} зм): ${oldValue} → ${newValue}`;
-                notificationText = `Казна истощается (-${value} зм). Новое значение: ${newValue}`;
-            }
-        }
-        
+        const statCfgLog = getStatConfig(statType);
+        const verb = operation === "add" ? statCfgLog.addVerb : statCfgLog.subVerb;
+        const sign = operation === "add" ? `+${value}` : `-${value}`;
+        const logMessage = `${verb} (${sign}${statCfgLog.unit}): ${oldValue} → ${newValue}`;
+        const notificationText = `${verb} (${sign}${statCfgLog.unit}). Новое значение: ${newValue}`;
+
         const changeText = operation === "add" ? `+${value}` : `-${value}`;
-        
+
         // Add to phase report with beautiful card
         const currentData = DataHandler.get();
-        let icon = "";
-        let color = "";
-        
-        if (statType === "supporters") {
-            icon = "👥";
-            color = operation === "add" ? "#27ae60" : "#e74c3c";
-        } else if (statType === "notoriety") {
-            icon = "⚠️";
-            color = operation === "add" ? "#e74c3c" : "#27ae60";
-        } else if (statType === "treasury") {
-            icon = "💰";
-            color = operation === "add" ? "#27ae60" : "#e74c3c";
-        }
-        
+        const iconAdj = statCfgLog.emoji;
+        const colorPositive = operation === "add" ? (statType === "notoriety" ? "#e74c3c" : "#27ae60") : (statType === "notoriety" ? "#27ae60" : "#e74c3c");
+        const color = colorPositive;
+
         const journalCard = `
             <div style="
                 border: 2px solid ${color}; 
@@ -1061,7 +731,7 @@ Hooks.once("ready", () => {
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             ">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                    <span style="font-size: 1.8em;">${icon}</span>
+                    <span style="font-size: 1.8em;">${iconAdj}</span>
                     <div>
                         <h5 style="margin: 0; color: ${color}; font-size: 1.2em;">
                             ${logMessage.split(':')[0]}
@@ -1090,15 +760,15 @@ Hooks.once("ready", () => {
                 </div>
             </div>
         `;
-        
+
         const newPhaseReport = (currentData.phaseReport || "") + journalCard;
         await DataHandler.update({ phaseReport: newPhaseReport });
-        
+
         // Create chat message
         const chatMessage = `
             <div style="border: 2px solid #667eea; padding: 15px; border-radius: 8px; background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);">
                 <h5 style="margin: 0 0 8px 0; color: #2d3748; font-size: 1.1em;">
-                    <i class="fas ${statType === 'supporters' ? 'fa-users' : statType === 'notoriety' ? 'fa-eye' : 'fa-coins'}"></i> 
+                    <i class="fas ${statCfgLog.icon}"></i> 
                     ${logMessage.split(':')[0]}
                 </h5>
                 <div style="color: #666; font-size: 0.9em;">
@@ -1106,166 +776,174 @@ Hooks.once("ready", () => {
                 </div>
             </div>
         `;
-        
+
         await ChatMessage.create({
             content: chatMessage,
             speaker: ChatMessage.getSpeaker()
         });
-        
+
         ui.notifications.info(notificationText);
-        
+
         // Disable button after use
         button.disabled = true;
         button.style.opacity = '0.5';
         button.innerHTML = `<i class="fas fa-check"></i> ${changeText}`;
     });
 
-    // Global listener for Rebellion mitigation buttons
-    $(document).on('click', '.roll-mitigate-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onMitigateRoll(ev);
-    });
+    // === Delegated button listeners (table-driven) ===
+    const BUTTON_ACTIONS = {
+        '.roll-mitigate-btn': '_onMitigateRoll',
+        '.restore-disabled-team-btn': '_onRestoreDisabledTeam',
+        '.pf2e-mitigation-btn': '_onPlayerSkillRoll',
+        '.roll-stukach-btn': '_onStukachRoll',
+        '.roll-failed-protest-btn': '_onFailedProtestRoll',
+        '.roll-catastrophic-mission-btn': '_onCatastrophicMissionRoll',
+        '.roll-ally-danger-btn': '_onAllyDangerRoll',
+        '.roll-traitor-btn': '_onTraitorRoll',
+        '.traitor-execute-btn': '_onTraitorExecute',
+        '.traitor-exile-btn': '_onTraitorExile',
+        '.traitor-imprison-btn': '_onTraitorImprison',
+        '.traitor-execute-loyalty-btn': '_onTraitorExecuteLoyalty',
+        '.traitor-exile-security-btn': '_onTraitorExileSecurity',
+        '.traitor-persuade-btn': '_onTraitorPersuade',
+        '.traitor-persuade-attempt-btn': '_onTraitorPersuadeAttempt',
+        '.traitor-execute-from-prison-btn': '_onTraitorExecuteFromPrison',
+        '.traitor-exile-from-prison-btn': '_onTraitorExileFromPrison',
+        '.traitor-prison-secrecy-btn': '_onTraitorPrisonSecrecy',
+        '.collect-supporters-bonus-btn': '_onCollectSupportersBonus',
+        '.traitor-redeem-attempt-btn': '_onTraitorRedeemAttempt',
+        '.invasion-ignore-btn': '_onIgnoreInvasion',
+        '.manipulate-choose-event-btn': '_onManipulateChooseEvent',
+        '.rescue-result-btn': '_onRescueResult',
+    };
 
-    // Global listener for Player Skill mitigation buttons
-    $(document).on('click', '.pf2e-mitigation-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onPlayerSkillRoll(ev);
-    });
-
-    // Global listener for Stukach roll buttons
-    $(document).on('click', '.roll-stukach-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onStukachRoll(ev);
-    });
-    
-    // Global listener for Failed Protest roll buttons
-    $(document).on('click', '.roll-failed-protest-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onFailedProtestRoll(ev);
-    });
-
-    // Global listener for Catastrophic Mission roll buttons
-    $(document).on('click', '.roll-catastrophic-mission-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onCatastrophicMissionRoll(ev);
-    });
-
-    // Global listener for Ally Danger roll buttons
-    $(document).on('click', '.roll-ally-danger-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onAllyDangerRoll(ev);
-    });
-
-    // Global listener for Traitor roll buttons
-    $(document).on('click', '.roll-traitor-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorRoll(ev);
-    });
-
-    // Global listeners for Traitor action buttons (removed traitor-redeem-btn)
-
-    $(document).on('click', '.traitor-execute-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorExecute(ev);
-    });
-
-    $(document).on('click', '.traitor-exile-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorExile(ev);
-    });
-
-    $(document).on('click', '.traitor-imprison-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorImprison(ev);
-    });
-
-    $(document).on('click', '.traitor-execute-loyalty-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorExecuteLoyalty(ev);
-    });
-
-    $(document).on('click', '.traitor-exile-security-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorExileSecurity(ev);
-    });
-
-    $(document).on('click', '.traitor-persuade-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorPersuade(ev);
-    });
-
-    $(document).on('click', '.traitor-persuade-attempt-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorPersuadeAttempt(ev);
-    });
-
-    $(document).on('click', '.traitor-execute-from-prison-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorExecuteFromPrison(ev);
-    });
-
-    $(document).on('click', '.traitor-exile-from-prison-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorExileFromPrison(ev);
-    });
-
-    $(document).on('click', '.traitor-prison-secrecy-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorPrisonSecrecy(ev);
-    });
-
-    $(document).on('click', '.collect-supporters-bonus-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onCollectSupportersBonus(ev);
-    });
-
-    $(document).on('click', '.traitor-redeem-attempt-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onTraitorRedeemAttempt(ev);
-    });
-
-    // Global listener for Invasion ignore buttons
-    $(document).on('click', '.invasion-ignore-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onIgnoreInvasion(ev);
-    });
-
-    // Global listener for Manipulate Events choice buttons (Cabalists)
-    $(document).on('click', '.manipulate-choose-event-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onManipulateChooseEvent(ev);
-    });
-
-    // Global listener for Rescue Character result button
-    $(document).on('click', '.rescue-result-btn', (ev) => {
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onRescueResult(ev);
-    });
+    for (const [selector, method] of Object.entries(BUTTON_ACTIONS)) {
+        $(document).on('click', selector, (ev) => {
+            ev.preventDefault();
+            const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+            sheet[method](ev);
+        });
+    }
 
     // Add reroll buttons to chat messages after they're created
-    Hooks.on('renderChatMessage', (message, html, data) => {
+    Hooks.on('renderChatMessage', async (message, html, data) => {
+        const rollContext = message.flags?.pf2e?.context ?? {};
+        const customRollFlags = message.flags?.["pf2e-ts-adv-pf1ehr"] ?? {};
+        const nestedRollContext = rollContext?.context ?? {};
+        const isRerollMessage = !!customRollFlags.isReroll || !!rollContext.isReroll || !!nestedRollContext.isReroll;
+        const eventRollResults = game.rebellionEventRollResults ?? (game.rebellionEventRollResults = {});
+        const teamActionRollResults = game.rebellionTeamActionRollResults ?? (game.rebellionTeamActionRollResults = {});
+        const silverActionRollResults = game.rebellionSilverActionRollResults ?? (game.rebellionSilverActionRollResults = {});
+        const processedEventMessages = game.rebellionProcessedEventMessages ?? (game.rebellionProcessedEventMessages = new Set());
+        const processedActionMessages = game.rebellionProcessedActionMessages ?? (game.rebellionProcessedActionMessages = new Set());
+        const pendingRerolls = game.rebellionPendingRerolls ?? (game.rebellionPendingRerolls = []);
+        const now = Date.now();
+        for (let i = pendingRerolls.length - 1; i >= 0; i--) {
+            const entry = pendingRerolls[i];
+            const startedAt = entry?.startedAt ?? 0;
+            const resolvedAt = entry?.resolvedAt ?? startedAt;
+            const tooOld = (now - startedAt) > 120000;
+            const resolvedLongAgo = !!entry?.resolved && (now - resolvedAt) > 15000;
+            if (tooOld || resolvedLongAgo) pendingRerolls.splice(i, 1);
+        }
+        const cloneData = (value) => foundry.utils.deepClone(value);
+        const messageTimestamp = message.timestamp ?? Date.now();
+        const pendingRerollEntry = (!message.isRoll || !isRerollMessage || customRollFlags.originalMessageId)
+            ? null
+            : [...pendingRerolls]
+                .reverse()
+                .find(entry =>
+                    entry &&
+                    entry.source === "module-reroll" &&
+                    !entry.resolved &&
+                    (!entry.matchedMessageId || entry.matchedMessageId === message.id) &&
+                    (Date.now() - (entry.startedAt ?? 0)) <= 30000 &&
+                    messageTimestamp >= ((entry.startedAt ?? 0) - 2000)
+                ) || null;
+        if (pendingRerollEntry && !pendingRerollEntry.matchedMessageId) {
+            pendingRerollEntry.matchedMessageId = message.id;
+        }
+
+        const getContextValue = (key) =>
+            customRollFlags[key] ??
+            rollContext[key] ??
+            nestedRollContext[key];
+        const pendingContextValue = (key) => pendingRerollEntry?.contextData?.[key];
+        const contextEventName = getContextValue("eventName") || pendingContextValue("eventName") || null;
+        const hasContextFlag = (flagName) => {
+            const value = getContextValue(flagName);
+            if (value === true) return true;
+            return pendingContextValue(flagName) === true;
+        };
+        const appendAllyRerollButton = (checkType) => {
+            if (!checkType || isRerollMessage) return false;
+
+            const rebellionData = DataHandler.get();
+            const rerollInfo = DataHandler.getRerollForCheck(rebellionData, checkType);
+            if (!rerollInfo.available) return false;
+
+            const buttonConfigByType = {
+                security: { color: "#4a90e2", label: "Переброс Чуко" },
+                loyalty: { color: "#e91e63", label: "Переброс Шенсен" },
+                secrecy: { color: "#9c27b0", label: "Переброс Стреа" }
+            };
+            const cfg = buttonConfigByType[checkType];
+            if (!cfg) return false;
+
+            if (html.find(`.rebellion-reroll-btn[data-message-id="${message.id}"][data-type="${checkType}"]`).length > 0) {
+                return true;
+            }
+
+            const rerollButton = $(`
+                <button class="rebellion-reroll-btn"
+                        data-message-id="${message.id}"
+                        data-type="${checkType}"
+                        style="margin: 5px; padding: 4px 8px; background: ${cfg.color}; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    ${cfg.label}
+                </button>
+            `);
+            html.find('.message-content').append(rerollButton);
+            return true;
+        };
+        const matchesEventName = (...names) => !!contextEventName && names.includes(contextEventName);
+        const isEventRollMessage = (stateFlag, ...eventNames) => {
+            const stateMatch = !!game.rebellionState?.[stateFlag];
+            const flagMatch = hasContextFlag(stateFlag);
+            const nameMatch = matchesEventName(...eventNames);
+            const rerollNameMatch = isRerollMessage && nameMatch;
+            return message.isRoll && (stateMatch || flagMatch || rerollNameMatch);
+        };
+        const getEventResultKey = () => customRollFlags.originalMessageId || pendingRerollEntry?.originalMessageId || message.id;
+        const toFiniteNumber = (value) => {
+            if (value === null || value === undefined) return null;
+            if (typeof value === "number") return Number.isFinite(value) ? value : null;
+            if (typeof value === "string") {
+                const match = value.match(/-?\d+(?:[.,]\d+)?/);
+                if (!match) return null;
+                const numeric = Number(match[0].replace(",", "."));
+                return Number.isFinite(numeric) ? numeric : null;
+            }
+            if (typeof value === "object") {
+                if ("value" in value) return toFiniteNumber(value.value);
+                if ("dc" in value) return toFiniteNumber(value.dc);
+            }
+            return null;
+        };
+        const firstFiniteNumber = (...values) => {
+            for (const value of values) {
+                const numeric = toFiniteNumber(value);
+                if (numeric !== null) return numeric;
+            }
+            return null;
+        };
+        const parseDcFromText = (text) => {
+            if (typeof text !== "string" || !text.length) return null;
+            const match = text.match(/(?:DC|КС|КС)\s*[:=]?\s*(\d+)/i);
+            if (!match) return null;
+            const numeric = Number(match[1]);
+            return Number.isFinite(numeric) ? numeric : null;
+        };
+
         // Обработка результатов @Rebellion inline check
         if (game.rebellionState?.isRebellionInlineCheck && message.isRoll) {
             const stateTimestamp = game.rebellionState.timestamp || 0;
@@ -1273,35 +951,30 @@ Hooks.once("ready", () => {
             if (messageTimestamp < stateTimestamp) {
                 return;
             }
-            
+
             console.log("Rebellion: Обработка результата @Rebellion inline check", message);
-            
+
             const roll = message.rolls?.[0];
             if (roll) {
                 const { checkType, checkLabel, dc } = game.rebellionState;
                 const total = roll.total;
-                
+
                 // Clear state
                 game.rebellionState = null;
-                
+
                 // Show result if DC was specified
                 if (dc) {
                     const success = total >= dc;
                     setTimeout(async () => {
-                        const resultMessage = `
-                            <div style="border: 2px solid ${success ? '#2e7d32' : '#c62828'}; padding: 10px; border-radius: 8px; background: ${success ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' : 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)'};">
-                                <h4 style="margin: 0 0 8px 0; color: ${success ? '#2e7d32' : '#c62828'};">
-                                    ${success ? '✅' : '❌'} ${checkLabel}
-                                </h4>
-                                <div style="font-size: 1.1em;">
-                                    <strong>${total}</strong> против КС <strong>${dc}</strong>
-                                </div>
-                                <div style="margin-top: 8px; font-weight: bold; color: ${success ? '#2e7d32' : '#c62828'};">
-                                    ${success ? 'Успех!' : 'Провал!'}
-                                </div>
-                            </div>
-                        `;
-                        
+                        const resultMessage = buildResultCard({
+                            icon: success ? "fa-check-circle" : "fa-times-circle",
+                            title: checkLabel,
+                            result: total, dc, success,
+                            background: success
+                                ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)'
+                                : 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)'
+                        });
+
                         await ChatMessage.create({
                             content: resultMessage,
                             speaker: ChatMessage.getSpeaker(),
@@ -1312,16 +985,16 @@ Hooks.once("ready", () => {
             }
             return;
         }
-        
+
         // Обработка результатов броска найма команды
         if (game.rebellionState?.isHireTeamRoll && message.isRoll) {
             // Проверяем, что это не наше собственное сообщение с результатом
             if (message.flags?.["pf2e-ts-adv-pf1ehr"]?.isHireTeamResult) {
                 return; // Игнорируем наши собственные сообщения с результатами
             }
-            
+
             console.log("Rebellion: Обработка результата броска найма команды", message);
-            
+
             const roll = message.rolls?.[0];
             if (roll) {
                 const { teamSlug, checkType, dc, teamDef } = game.rebellionState;
@@ -1329,18 +1002,18 @@ Hooks.once("ready", () => {
                 const success = total >= dc;
                 const rollResult = roll.dice[0]?.results?.[0]?.result || 1;
                 const critFail = rollResult === 1;
-                
+
                 console.log(`Rebellion: Результат найма команды - ${total} vs DC ${dc}, успех: ${success}, критический провал: ${critFail}`);
-                
+
                 // Clear state immediately to prevent double processing
                 const state = game.rebellionState;
                 game.rebellionState = null;
-                
+
                 // Apply result immediately like other events
                 setTimeout(async () => {
                     try {
                         const data = DataHandler.get();
-                        
+
                         // Create beautiful hire message like in _handleHireTeamResult
                         let hireMessage = `
                             <div style="
@@ -1376,7 +1049,7 @@ Hooks.once("ready", () => {
                                     </div>
                                 </div>
                             `;
-                            
+
                             // Add team to rebellion
                             const teams = JSON.parse(JSON.stringify(data.teams));
                             teams.push({
@@ -1385,12 +1058,12 @@ Hooks.once("ready", () => {
                                 disabled: false,
                                 missing: false
                             });
-                            
-                            await DataHandler.update({ 
-                                teams, 
-                                actionsUsed: (data.actionsUsed || 0) + 1 
+
+                            await DataHandler.update({
+                                teams,
+                                actionsUsedThisWeek: (data.actionsUsedThisWeek || 0) + 1
                             });
-                            
+
                         } else if (critFail) {
                             hireMessage += `
                                 <div style="padding: 12px; background: rgba(183, 28, 28, 0.1); border-radius: 8px; border: 2px solid #b71c1c;">
@@ -1400,11 +1073,11 @@ Hooks.once("ready", () => {
                                     </div>
                                 </div>
                             `;
-                            
-                            await DataHandler.update({ 
-                                actionsUsed: (data.actionsUsed || 0) + 1 
+
+                            await DataHandler.update({
+                                actionsUsedThisWeek: (data.actionsUsedThisWeek || 0) + 1
                             });
-                            
+
                         } else {
                             hireMessage += `
                                 <div style="padding: 12px; background: rgba(211, 47, 47, 0.1); border-radius: 8px; border: 2px solid #d32f2f;">
@@ -1414,14 +1087,14 @@ Hooks.once("ready", () => {
                                     </div>
                                 </div>
                             `;
-                            
-                            await DataHandler.update({ 
-                                actionsUsed: (data.actionsUsed || 0) + 1 
+
+                            await DataHandler.update({
+                                actionsUsedThisWeek: (data.actionsUsedThisWeek || 0) + 1
                             });
                         }
 
                         hireMessage += `</div>`;
-                        
+
                         await ChatMessage.create({
                             content: hireMessage,
                             speaker: ChatMessage.getSpeaker(),
@@ -1431,9 +1104,9 @@ Hooks.once("ready", () => {
                                 }
                             }
                         });
-                        
+
                         console.log("Rebellion: Результат найма команды обработан");
-                        
+
                     } catch (error) {
                         console.error("Rebellion: Ошибка при обработке результата найма команды:", error);
                     }
@@ -1450,19 +1123,19 @@ Hooks.once("ready", () => {
             if (messageTimestamp < stateTimestamp) {
                 return;
             }
-            
+
             console.log("Rebellion: Обработка результата броска бонусного действия Мантикке", message);
-            
+
             const roll = message.rolls?.[0];
             if (roll) {
                 const { teamIdx, teamType, dc, totalMod } = game.rebellionState;
                 const total = roll.total;
-                
+
                 console.log(`Rebellion: Результат бонусного действия Мантикке - ${total} vs DC ${dc}`);
-                
+
                 // Clear state immediately to prevent double processing
                 game.rebellionState = null;
-                
+
                 // Apply result
                 setTimeout(async () => {
                     try {
@@ -1472,10 +1145,10 @@ Hooks.once("ready", () => {
                             console.error("Rebellion: Команда не найдена при обработке результата");
                             return;
                         }
-                        
+
                         const def = getTeamDefinition(team.type);
                         const teamRank = def.rank || 1;
-                        
+
                         // Уровень задачи = уровень игрока (если игрок) или первого члена Party (если ГМ)
                         let playerLevel = 1;
                         if (!game.user.isGM && game.user.character) {
@@ -1486,58 +1159,58 @@ Hooks.once("ready", () => {
                             const playerCharacter = game.actors.find(a => a.type === "character" && a.hasPlayerOwner);
                             if (playerCharacter) playerLevel = playerCharacter.level || 1;
                         }
-                        
+
                         // Use PF2e Earn Income table
                         const earnIncomeResult = calculateEarnIncome(playerLevel, teamRank, total, dc);
                         const incomeInCopper = earnIncomeResult.income;
                         const incomeInGold = incomeInCopper / 100;
                         const formattedIncome = formatIncome(incomeInCopper);
-                        
+
                         // Получаем sheet для создания сообщения
                         const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-                        
+
                         const rollObj = {
                             total: roll.dice?.[0]?.results?.[0]?.result || roll.total,
                             result: roll.dice?.[0]?.results?.[0]?.result || roll.total
                         };
-                        
+
                         // Determine result type
                         let resultType = earnIncomeResult.result;
                         const profLabel = { trained: 'Обученный', expert: 'Эксперт', master: 'Мастер' }[earnIncomeResult.proficiency] || earnIncomeResult.proficiency;
-                        
+
                         let additionalInfo = `👑 <strong>Бонусное действие королевы Мантикке</strong><br>`;
                         additionalInfo += `<strong>Заработок Денег (7 дней)</strong><br>`;
                         additionalInfo += `Уровень: ${playerLevel}, Мастерство: ${profLabel}<br>`;
                         additionalInfo += `💰 Заработано: <strong>${formattedIncome}</strong>`;
-                        
+
                         if (resultType === 'criticalSuccess') {
                             additionalInfo += `<br><em>Критический успех!</em>`;
                         } else if (resultType === 'criticalFailure') {
                             additionalInfo += `<br><em>Критический провал!</em>`;
                         }
-                        
+
                         const chatMessage = sheet._createTeamActionMessage(
-                            team, 'earnGold', 
-                            resultType === 'criticalFailure' ? 'critical' : (resultType === 'failure' ? 'failure' : 'success'), 
+                            team, 'earnGold',
+                            resultType === 'criticalFailure' ? 'critical' : (resultType === 'failure' ? 'failure' : 'success'),
                             rollObj, total, dc, additionalInfo
                         );
-                        
+
                         ChatMessage.create({ content: chatMessage, speaker: ChatMessage.getSpeaker() });
                         await sheet._logToJournal(chatMessage);
-                        
+
                         // Update treasury and mark bonus action as used
-                        await DataHandler.update({ 
+                        await DataHandler.update({
                             treasury: data.treasury + incomeInGold,
                             manticceBonusUsedThisWeek: true
                         });
-                        
+
                         ui.notifications.info(`Бонусное действие выполнено! Заработано ${formattedIncome}.`);
-                        
+
                         console.log("Rebellion: Результат бонусного действия Мантикке обработан");
-                        
+
                         // Обновляем интерфейс
                         if (sheet.rendered) sheet.render();
-                        
+
                     } catch (error) {
                         console.error("Rebellion: Ошибка при обработке результата бонусного действия Мантикке:", error);
                     }
@@ -1547,166 +1220,280 @@ Hooks.once("ready", () => {
         }
 
         // Обработка результатов броска действия Серебряных Воронов
-        if (game.rebellionState?.isSilverRavensActionRoll && message.isRoll) {
-            // Проверяем timestamp для защиты от повторной обработки
-            const stateTimestamp = game.rebellionState.timestamp || 0;
+        const isSilverRavensActionRoll = message.isRoll && (
+            !!game.rebellionState?.isSilverRavensActionRoll ||
+            (isRerollMessage && hasContextFlag("isSilverRavensActionRoll"))
+        );
+        let handledSilverRavensActionRoll = false;
+        if (isSilverRavensActionRoll) {
+            const stateTimestamp = game.rebellionState?.timestamp || 0;
             const messageTimestamp = message.timestamp || Date.now();
-            if (messageTimestamp < stateTimestamp) {
+            if (stateTimestamp && messageTimestamp < stateTimestamp) {
                 return;
             }
-            
-            console.log("Rebellion: Обработка результата броска Серебряных Воронов", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const { selectedAction, checkType, dc, totalMod } = game.rebellionState;
-                const total = roll.total;
-                const rollResult = roll.dice?.[0]?.results?.[0]?.result || roll.total;
-                
-                console.log(`Rebellion: Результат Серебряных Воронов - ${total} vs DC ${dc}, действие: ${selectedAction}`);
-                
-                // Clear state immediately to prevent double processing
-                game.rebellionState = null;
-                
-                // Apply result
-                setTimeout(async () => {
-                    try {
-                        const data = DataHandler.get();
-                        const bonuses = DataHandler.getRollBonuses(data, selectedAction);
-                        
-                        // Создаем виртуальную команду Silver Ravens
-                        const silverRavensTeam = {
-                            label: "Серебряные Вороны",
-                            type: "silverRavens",
-                            currentAction: selectedAction,
-                            manager: "",
-                            bonus: 0,
-                            isStrategistTarget: false
-                        };
-                        
-                        // Получаем sheet для вызова _processSilverRavensActionResult
-                        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-                        
-                        // Создаем объект roll для передачи в обработчик
-                        const rollObj = {
-                            total: rollResult,
-                            result: rollResult
-                        };
-                        
-                        await sheet._processSilverRavensActionResult(silverRavensTeam, selectedAction, checkType, dc, rollObj, total, data, bonuses);
-                        
-                        console.log("Rebellion: Результат Серебряных Воронов обработан");
-                        
-                    } catch (error) {
-                        console.error("Rebellion: Ошибка при обработке результата Серебряных Воронов:", error);
-                    }
-                }, 100);
-            }
-            return;
-        }
 
-        // Обработка результатов броска действия команды
-        if (game.rebellionState?.isTeamActionRoll && message.isRoll) {
-            // Проверяем, что это не наше собственное сообщение с результатом
-            if (message.flags?.["pf2e-ts-adv-pf1ehr"]?.isTeamActionResult) {
-                return; // Игнорируем наши собственные сообщения с результатами
-            }
-            
-            // Проверяем, что сообщение создано после установки состояния (защита от повторной обработки)
-            const stateTimestamp = game.rebellionState.timestamp || 0;
-            const messageTimestamp = message.timestamp || Date.now();
-            if (messageTimestamp < stateTimestamp) {
-                return; // Сообщение создано до установки состояния
-            }
-            
-            console.log("Rebellion: Обработка результата броска действия команды", message);
-            
             const roll = message.rolls?.[0];
             if (roll) {
-                const { teamIdx, teamType, selectedAction, checkType, dc, totalMod } = game.rebellionState;
-                const total = roll.total;
-                const rollResult = roll.dice?.[0]?.results?.[0]?.result || roll.total;
-                
-                console.log(`Rebellion: Результат действия команды - ${total} vs DC ${dc}, действие: ${selectedAction}`);
-                
-                // Clear state immediately to prevent double processing
-                game.rebellionState = null;
-                
-                // Apply result
-                setTimeout(async () => {
-                    try {
-                        const data = DataHandler.get();
-                        const teams = JSON.parse(JSON.stringify(data.teams));
-                        const team = teams[teamIdx];
-                        if (!team) {
-                            console.error("Rebellion: Команда не найдена при обработке результата");
-                            return;
+                if (processedActionMessages.has(message.id)) return;
+
+                const resultKey = getEventResultKey();
+                const previousResult = silverActionRollResults[resultKey] ?? null;
+                const selectedAction =
+                    game.rebellionState?.selectedAction ??
+                    getContextValue("selectedAction") ??
+                    pendingContextValue("selectedAction") ??
+                    previousResult?.selectedAction ??
+                    null;
+                const checkType =
+                    game.rebellionState?.checkType ??
+                    getContextValue("checkType") ??
+                    getContextValue("skill") ??
+                    pendingContextValue("checkType") ??
+                    pendingContextValue("skill") ??
+                    previousResult?.checkType ??
+                    null;
+                appendAllyRerollButton(checkType);
+                const dc = firstFiniteNumber(
+                    game.rebellionState?.dc,
+                    getContextValue("dc"),
+                    pendingContextValue("dc"),
+                    previousResult?.dc,
+                    parseDcFromText(message.flavor),
+                    parseDcFromText(message.content)
+                );
+
+                if (!selectedAction || !checkType) {
+                    console.warn("Rebellion: Silver Ravens reroll skipped due to missing context", { selectedAction, checkType, messageId: message.id });
+                    if (game.rebellionState?.isSilverRavensActionRoll) {
+                        game.rebellionState = null;
+                    }
+                } else {
+                    processedActionMessages.add(message.id);
+                    handledSilverRavensActionRoll = true;
+
+                    const baselineData = cloneData(previousResult?.preData ?? DataHandler.get());
+                    if (previousResult) {
+                        await DataHandler.update(cloneData(baselineData));
+                    }
+
+                    if (game.rebellionState?.isSilverRavensActionRoll) {
+                        game.rebellionState = null;
+                    }
+
+                    const total = roll.total;
+                    const rollResult = roll.dice?.[0]?.results?.[0]?.result || roll.total;
+
+                    setTimeout(async () => {
+                        try {
+                            const data = cloneData(baselineData);
+                            const bonuses = DataHandler.getRollBonuses(data, selectedAction);
+                            const silverRavensTeam = {
+                                label: "РЎРµСЂРµР±СЂСЏРЅС‹Рµ Р’РѕСЂРѕРЅС‹",
+                                type: "silverRavens",
+                                currentAction: selectedAction,
+                                manager: "",
+                                bonus: 0,
+                                isStrategistTarget: false
+                            };
+                            const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+                            const rollObj = {
+                                total: rollResult,
+                                result: rollResult
+                            };
+
+                            await sheet._processSilverRavensActionResult(silverRavensTeam, selectedAction, checkType, dc, rollObj, total, data, bonuses);
+                            silverActionRollResults[resultKey] = {
+                                preData: baselineData,
+                                selectedAction,
+                                checkType,
+                                dc,
+                                timestamp: Date.now()
+                            };
+                        } catch (error) {
+                            console.error("Rebellion: РћС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ СЂРµР·СѓР»СЊС‚Р°С‚Р° РЎРµСЂРµР±СЂСЏРЅС‹С… Р’РѕСЂРѕРЅРѕРІ:", error);
                         }
-                        
-                        team.currentAction = selectedAction;
-                        team.hasActed = true;
-                        
-                        const def = getTeamDefinition(team.type);
-                        const bonuses = DataHandler.getRollBonuses(data, selectedAction);
-                        
-                        // Получаем sheet для вызова _processTeamActionResult
-                        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-                        
-                        // Создаем объект roll для передачи в обработчик
-                        const rollObj = {
-                            total: rollResult, // Только результат кубика без модификаторов
-                            result: rollResult
-                        };
-                        
-                        await sheet._processTeamActionResult(team, selectedAction, checkType, dc, rollObj, total, teamIdx, teams, data, bonuses, def);
-                        
-                        console.log("Rebellion: Результат действия команды обработан");
-                        
-                        // Обновляем интерфейс
-                        if (sheet.rendered) sheet.render();
-                        
-                    } catch (error) {
-                        console.error("Rebellion: Ошибка при обработке результата действия команды:", error);
-                    }
-                }, 100);
+                    }, 100);
+                }
             }
-            return;
+            if (handledSilverRavensActionRoll) return;
         }
 
-        // Обработка результатов броска "Стукач"
-        if (game.rebellionState?.isStukachRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Стукач", message);
-            
+        const isTeamActionRoll = message.isRoll && (
+            !!game.rebellionState?.isTeamActionRoll ||
+            (isRerollMessage && hasContextFlag("isTeamActionRoll"))
+        );
+        let handledTeamActionRoll = false;
+        if (isTeamActionRoll) {
+            if (message.flags?.["pf2e-ts-adv-pf1ehr"]?.isTeamActionResult) {
+                return;
+            }
+
+            const stateTimestamp = game.rebellionState?.timestamp || 0;
+            const messageTimestamp = message.timestamp || Date.now();
+            if (stateTimestamp && messageTimestamp < stateTimestamp) {
+                return;
+            }
+
             const roll = message.rolls?.[0];
             if (roll) {
-                const total = roll.total;
-                const dc = 15;
-                const success = total >= dc;
-                
-                console.log(`Rebellion: Результат Стукач - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
+                if (processedActionMessages.has(message.id)) return;
+
+                const resultKey = getEventResultKey();
+                const previousResult = teamActionRollResults[resultKey] ?? null;
+                const selectedAction =
+                    game.rebellionState?.selectedAction ??
+                    getContextValue("selectedAction") ??
+                    pendingContextValue("selectedAction") ??
+                    previousResult?.selectedAction ??
+                    null;
+                const checkType =
+                    game.rebellionState?.checkType ??
+                    getContextValue("checkType") ??
+                    getContextValue("skill") ??
+                    pendingContextValue("checkType") ??
+                    pendingContextValue("skill") ??
+                    previousResult?.checkType ??
+                    null;
+                appendAllyRerollButton(checkType);
+                const teamType =
+                    game.rebellionState?.teamType ??
+                    getContextValue("teamType") ??
+                    pendingContextValue("teamType") ??
+                    previousResult?.teamType ??
+                    null;
+                const teamIdxRaw =
+                    game.rebellionState?.teamIdx ??
+                    getContextValue("teamIdx") ??
+                    pendingContextValue("teamIdx") ??
+                    previousResult?.teamIdx;
+                let resolvedTeamIdx = Number(teamIdxRaw);
+                const dc = firstFiniteNumber(
+                    game.rebellionState?.dc,
+                    getContextValue("dc"),
+                    pendingContextValue("dc"),
+                    previousResult?.dc,
+                    parseDcFromText(message.flavor),
+                    parseDcFromText(message.content)
+                );
+
+                if (!selectedAction || !checkType) {
+                    console.warn("Rebellion: Team action reroll skipped due to missing context", { selectedAction, checkType, messageId: message.id });
+                    if (game.rebellionState?.isTeamActionRoll) {
+                        game.rebellionState = null;
+                    }
+                } else {
+                    processedActionMessages.add(message.id);
+                    handledTeamActionRoll = true;
+
+                    const baselineData = cloneData(previousResult?.preData ?? DataHandler.get());
+                    if (previousResult) {
+                        await DataHandler.update(cloneData(baselineData));
+                    }
+
+                    if (game.rebellionState?.isTeamActionRoll) {
+                        game.rebellionState = null;
+                    }
+
+                    const total = roll.total;
+                    const rollResult = roll.dice?.[0]?.results?.[0]?.result || roll.total;
+
+                    setTimeout(async () => {
+                        try {
+                            const data = cloneData(baselineData);
+                            const teams = cloneData(data.teams || []);
+
+                            if (!Number.isFinite(resolvedTeamIdx) || resolvedTeamIdx < 0 || resolvedTeamIdx >= teams.length) {
+                                resolvedTeamIdx = teamType ? teams.findIndex(t => t?.type === teamType) : -1;
+                            }
+                            const team = resolvedTeamIdx >= 0 ? teams[resolvedTeamIdx] : null;
+                            if (!team) {
+                                console.error("Rebellion: РљРѕРјР°РЅРґР° РЅРµ РЅР°Р№РґРµРЅР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ СЂРµСЂРѕР»Р»Р° РґРµР№СЃС‚РІРёСЏ", { teamIdxRaw, teamType, resultKey });
+                                return;
+                            }
+
+                            team.currentAction = selectedAction;
+                            team.hasActed = true;
+
+                            const def = getTeamDefinition(team.type);
+                            const bonuses = DataHandler.getRollBonuses(data, selectedAction);
+                            const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+                            const rollObj = {
+                                total: rollResult,
+                                result: rollResult
+                            };
+
+                            await sheet._processTeamActionResult(team, selectedAction, checkType, dc, rollObj, total, resolvedTeamIdx, teams, data, bonuses, def);
+                            teamActionRollResults[resultKey] = {
+                                preData: baselineData,
+                                teamIdx: resolvedTeamIdx,
+                                teamType: team.type,
+                                selectedAction,
+                                checkType,
+                                dc,
+                                timestamp: Date.now()
+                            };
+
+                            if (sheet.rendered) sheet.render();
+                        } catch (error) {
+                            console.error("Rebellion: РћС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ СЂРµР·СѓР»СЊС‚Р°С‚Р° РґРµР№СЃС‚РІРёСЏ РєРѕРјР°РЅРґС‹:", error);
+                        }
+                    }, 100);
+                }
+            }
+            if (handledTeamActionRoll) return;
+        }
+
+        if (isEventRollMessage("isStukachRoll", "Стукач")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Стукач", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 15;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
                     const rebellionData = DataHandler.get();
-                    
-                    let resultMessage = `<h3>🕵️ Результат события: Стукач</h3>`;
-                    
-                    if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Стукач нейтрализован! Верные сторонники справились с ситуацией.</p>`;
-                        resultMessage += `<p><strong>Последствия:</strong> Потеря 1 сторонника, но никаких дальнейших проблем.</p>`;
-                        await DataHandler.update({ supporters: Math.max(0, rebellionData.supporters - 1) });
-                    } else {
+                    const preSupporters = firstFiniteNumber(previousResult?.preSupporters, rebellionData.supporters, 0);
+                    const preNotoriety = firstFiniteNumber(previousResult?.preNotoriety, rebellionData.notoriety, 0);
+
+                    let notGain = 0;
+                    if (!success) {
                         const notRoll = new Roll("1d6");
                         await notRoll.evaluate();
-                        const notGain = notRoll.total;
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Стукач ускользнул! Информация попала к врагам.</p>`;
-                        resultMessage += `<p><strong>Последствия:</strong> Потеря 1 сторонника, +${notGain} Известность.</p>`;
-                        await DataHandler.update({
-                            supporters: Math.max(0, rebellionData.supporters - 1),
-                            notoriety: rebellionData.notoriety + notGain
-                        });
+                        notGain = notRoll.total;
                     }
-                    
+
+                    await DataHandler.update({
+                        supporters: Math.max(0, preSupporters - 1),
+                        notoriety: preNotoriety + (success ? 0 : notGain)
+                    });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Стукач",
+                        preSupporters,
+                        preNotoriety,
+                        success,
+                        notGain,
+                        total,
+                        dc,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
+                    let resultMessage = `<h3>🕵️ Результат события: Стукач</h3>`;
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+                    if (success) {
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Стукач нейтрализован. Потеряно 1 сторонник.</p>`;
+                    } else {
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Стукач ускользнул. Потеряно 1 сторонник и +${notGain} Известность.</p>`;
+                    }
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker(),
@@ -1716,69 +1503,82 @@ Hooks.once("ready", () => {
                             }
                         }
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем лист восстания
+
+                    if (game.rebellionState?.isStukachRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000); // Небольшая задержка для корректного отображения
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Стукач
         }
-        
-        // Обработка результатов броска "Провальный протест"
-        if (game.rebellionState?.isFailedProtestRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Провальный протест", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 25;
-                const success = total >= dc;
-                
-                console.log(`Rebellion: Результат Провальный протест - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
+        if (isEventRollMessage("isFailedProtestRoll", "Провальный протест")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Провальный протест", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 25;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
                     const rebellionData = DataHandler.get();
-                    
-                    // Случайный модификатор поселения (всегда применяется)
+
+                    const preSupporters = firstFiniteNumber(previousResult?.preSupporters, rebellionData.supporters, 0);
+                    const prePopulation = firstFiniteNumber(previousResult?.prePopulation, rebellionData.population, 0);
+                    const preEvents = cloneData(previousResult?.preEvents ?? rebellionData.events ?? []);
+
                     const settlementModifiers = ["Коррупция", "Преступность", "Экономика", "Закон", "Знание", "Общество"];
                     const randomModifier = settlementModifiers[Math.floor(Math.random() * settlementModifiers.length)];
-                    
-                    // Добавляем временное событие с модификатором поселения
-                    const events = JSON.parse(JSON.stringify(rebellionData.events || []));
+
+                    const events = cloneData(preEvents);
                     events.push({
                         name: "Провальный протест",
                         desc: `Модификатор поселения Кинтарго "${randomModifier}" уменьшен на 4`,
-                        weekStarted: rebellionData.week + 1,
+                        weekStarted: (rebellionData.week ?? 0) + 1,
                         duration: 1,
                         isPersistent: false
                     });
-                    
-                    let resultMessage = `<h3>🏛️ Результат события: Провальный протест</h3>`;
-                    
-                    if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Потери сторонников предотвращены успешной проверкой Безопасности!</p>`;
-                        resultMessage += `<p style="color:black">Однако модификатор поселения Кинтарго "${randomModifier}" все равно уменьшен на 4 на следующую неделю.</p>`;
-                        await DataHandler.update({ events });
-                    } else {
+
+                    let supporters = preSupporters;
+                    let population = prePopulation;
+                    let loss = 0;
+                    if (!success) {
                         const suppRoll = new Roll("2d6");
                         await suppRoll.evaluate();
-                        const loss = suppRoll.total;
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Протест провалился! Сторонники разочарованы.</p>`;
-                        resultMessage += `<p><strong>Последствия:</strong> Потеря ${loss} сторонников и населения. Модификатор поселения Кинтарго "${randomModifier}" уменьшен на 4 на следующую неделю.</p>`;
-                        await DataHandler.update({
-                            supporters: Math.max(0, rebellionData.supporters - loss),
-                            population: Math.max(0, rebellionData.population - loss),
-                            events
-                        });
+                        loss = suppRoll.total;
+                        supporters = Math.max(0, preSupporters - loss);
+                        population = Math.max(0, prePopulation - loss);
                     }
-                    
+
+                    await DataHandler.update({ supporters, population, events });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Провальный протест",
+                        preSupporters,
+                        prePopulation,
+                        preEvents,
+                        success,
+                        total,
+                        dc,
+                        loss,
+                        randomModifier,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
+                    let resultMessage = `<h3>🏛️ Результат события: Провальный протест</h3>`;
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+                    if (success) {
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Потери сторонников предотвращены.</p>`;
+                    } else {
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Потеряно ${loss} сторонников и населения.</p>`;
+                    }
+                    resultMessage += `<p>Модификатор поселения Кинтарго "${randomModifier}" уменьшен на 4 на следующую неделю.</p>`;
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker(),
@@ -1788,241 +1588,382 @@ Hooks.once("ready", () => {
                             }
                         }
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем лист восстания
+
+                    if (game.rebellionState?.isFailedProtestRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000); // Небольшая задержка для корректного отображения
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Провальный протест
         }
-
-        // Обработка результатов броска "Катастрофическая миссия"
-        if (game.rebellionState?.isCatastrophicMissionRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Катастрофическая миссия", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 20;
-                const success = total >= dc;
-                const teamType = game.rebellionState.teamType;
-                
-                console.log(`Rebellion: Результат Катастрофическая миссия - ${total} vs DC ${dc}, успех: ${success}, команда: ${teamType}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
-                    const rebellionData = DataHandler.get();
-                    
-                    // Бросок на известность в любом случае
-                    const notorietyRoll = new Roll("1d6");
-                    await notorietyRoll.evaluate();
-                    const notorietyGain = notorietyRoll.total;
-                    
-                    const teams = JSON.parse(JSON.stringify(rebellionData.teams));
-                    const teamIndex = teams.findIndex(t => t.type === teamType);
-                    const teamDef = getTeamDefinition(teamType);
-                    
-                    let resultMessage = `<h3>⚔️ Результат события: Катастрофическая миссия</h3>`;
-                    
-                    if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Команда ${teamDef?.label || teamType} достигла цели, но получила значительный урон. Команда становится недееспособной.</p>`;
-                        if (teamIndex !== -1) teams[teamIndex].disabled = true;
+        if (isEventRollMessage("isCatastrophicMissionRoll", "Катастроф. миссия", "Катастрофическая миссия")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Катастрофическая миссия", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 20;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
+                    const teamType = game.rebellionState?.teamType || getContextValue("teamType") || pendingContextValue("teamType") || previousResult?.teamType || null;
+                    if (!teamType) {
+                        console.warn("Rebellion: Не удалось определить команду для Катастрофической миссии", message.id);
                     } else {
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Команда ${teamDef?.label || teamType} достигла цели, но получила критический урон. Команда уничтожена и должна быть заменена.</p>`;
-                        if (teamIndex !== -1) teams.splice(teamIndex, 1);
-                    }
-                    
-                    resultMessage += `<p style="color:red">Известность увеличена на ${notorietyGain}.</p>`;
-                    
-                    await DataHandler.update({ 
-                        teams, 
-                        notoriety: rebellionData.notoriety + notorietyGain 
-                    });
-                    
-                    await ChatMessage.create({
-                        content: resultMessage,
-                        speaker: ChatMessage.getSpeaker(),
-                        flags: {
-                            "pf2e-ts-adv-pf1ehr": {
-                                isCatastrophicMissionResult: true
-                            }
-                        }
-                    });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем лист восстания
-                    const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
-                    if (sheet) sheet.render();
-                    
-                }, 1000); // Небольшая задержка для корректного отображения
-            }
-            
-            return; // Не обрабатываем reroll кнопки для Катастрофическая миссия
-        }
+                        const success = total >= dc;
+                        const rebellionData = DataHandler.get();
+                        const preTeams = cloneData(previousResult?.preTeams ?? rebellionData.teams ?? []);
+                        const preNotoriety = firstFiniteNumber(previousResult?.preNotoriety, rebellionData.notoriety, 0);
 
-        // Обработка результатов броска "Союзник в опасности"
-        if (game.rebellionState?.isAllyDangerRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Союзник в опасности", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = game.rebellionState.dc;
-                const success = total >= dc;
-                const allyIndex = game.rebellionState.allyIndex;
-                const allyName = game.rebellionState.allyName;
-                
-                console.log(`Rebellion: Результат Союзник в опасности - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
-                    const rebellionData = DataHandler.get();
-                    const allies = JSON.parse(JSON.stringify(rebellionData.allies));
-                    const ally = allies[allyIndex];
-                    
-                    let resultMessage = `<h3>⚠️ Результат события: Союзник в опасности</h3>`;
-                    resultMessage += `<p><strong>Союзник:</strong> ${allyName}</p>`;
-                    
-                    if (success) {
-                        // Успех - союзник пропадает на неделю
-                        ally.missing = true;
-                        ally.missingWeek = rebellionData.week;
-                        resultMessage += `<p style="color:#d84315"><strong>✅ Успех!</strong> ${allyName} пропадает без вести на неделю, но не схвачен.</p>`;
-                        resultMessage += `<p>На следующей неделе будет проведена еще одна проверка Безопасности против того же КС для возвращения союзника.</p>`;
+                        const notorietyRoll = new Roll("1d6");
+                        await notorietyRoll.evaluate();
+                        const notorietyGain = notorietyRoll.total;
+
+                        const teams = cloneData(preTeams);
+                        const teamIndex = teams.findIndex(t => t.type === teamType);
+                        const teamDef = getTeamDefinition(teamType);
+
+                        if (success) {
+                            if (teamIndex !== -1) teams[teamIndex].disabled = true;
+                        } else {
+                            if (teamIndex !== -1) teams.splice(teamIndex, 1);
+                        }
+
+                        await DataHandler.update({
+                            teams,
+                            notoriety: preNotoriety + notorietyGain
+                        });
+
+                        eventRollResults[resultKey] = {
+                            eventName: "Катастроф. миссия",
+                            preTeams,
+                            preNotoriety,
+                            teamType,
+                            success,
+                            total,
+                            dc,
+                            notorietyGain,
+                            timestamp: Date.now()
+                        };
+
+                        const rerollMarker = previousResult || isRerollMessage
+                            ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                            : "";
+
+                        const teamLabel = teamDef?.label || teamType;
+                        let resultMessage = `<h3>⚔️ Результат события: Катастрофическая миссия</h3>`;
+                        resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+                        if (success) {
+                            resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Команда ${teamLabel} достигла цели, но стала недееспособной.</p>`;
+                        } else {
+                            resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Команда ${teamLabel} уничтожена и должна быть заменена.</p>`;
+                        }
+                        resultMessage += `<p style="color:red">Известность увеличена на ${notorietyGain}.</p>`;
+                        resultMessage += rerollMarker;
+
+                        await ChatMessage.create({
+                            content: resultMessage,
+                            speaker: ChatMessage.getSpeaker(),
+                            flags: {
+                                "pf2e-ts-adv-pf1ehr": {
+                                    isCatastrophicMissionResult: true
+                                }
+                            }
+                        });
+
+                        if (game.rebellionState?.isCatastrophicMissionRoll) game.rebellionState = null;
+                        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
+                        if (sheet) sheet.render();
+                    }
+                }
+            }
+        }
+        if (isEventRollMessage("isAllyDangerRoll", "Союзник в опасности")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Союзник в опасности", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
+                    const dc = firstFiniteNumber(
+                        game.rebellionState?.dc,
+                        getContextValue("dc"),
+                        pendingContextValue("dc"),
+                        previousResult?.dc,
+                        rollContext?.dc,
+                        nestedRollContext?.dc,
+                        parseDcFromText(message.flavor),
+                        parseDcFromText(message.content)
+                    );
+                    const allyIndex = firstFiniteNumber(
+                        game.rebellionState?.allyIndex,
+                        getContextValue("allyIndex"),
+                        pendingContextValue("allyIndex"),
+                        previousResult?.allyIndex
+                    );
+                    const allyName = game.rebellionState?.allyName || getContextValue("allyName") || pendingContextValue("allyName") || previousResult?.allyName || "Союзник";
+                    if (dc === null || allyIndex === null || allyIndex < 0) {
+                        console.warn("Rebellion: Не удалось определить параметры для события 'Союзник в опасности'", { dc, allyIndex, messageId: message.id });
                     } else {
-                        // Провал - союзник схвачен
-                        ally.captured = true;
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> ${allyName} схвачен!</p>`;
-                        resultMessage += `<p>Союзник может быть спасен успешным действием "Спасение персонажа".</p>`;
-                    }
-                    
-                    await DataHandler.update({ allies });
-                    
-                    await ChatMessage.create({
-                        content: resultMessage,
-                        speaker: ChatMessage.getSpeaker(),
-                        flags: {
-                            "pf2e-ts-adv-pf1ehr": {
-                                isAllyDangerResult: true
-                            }
-                        }
-                    });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем лист восстания
-                    const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
-                    if (sheet) sheet.render();
-                    
-                }, 1000); // Небольшая задержка для корректного отображения
-            }
-            
-            return; // Не обрабатываем reroll кнопки для Союзник в опасности
-        }
+                        const total = roll.total;
+                        const success = total >= dc;
+                        const rebellionData = DataHandler.get();
+                        const preAllies = cloneData(previousResult?.preAllies ?? rebellionData.allies ?? []);
+                        const allies = cloneData(preAllies);
+                        const ally = allies[allyIndex];
 
-        // Обработка результатов броска "Предатель"
-        if (game.rebellionState?.isTraitorRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Предатель", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 20;
-                const success = total >= dc;
-                const teamType = game.rebellionState.teamType;
-                
-                console.log(`Rebellion: Результат Предатель - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
+                        if (ally) {
+                            if (success) {
+                                ally.missing = true;
+                                ally.captured = false;
+                                ally.missingWeek = rebellionData.week;
+                            } else {
+                                ally.captured = true;
+                                ally.missing = false;
+                                delete ally.missingWeek;
+                            }
+
+                            await DataHandler.update({ allies });
+
+                            eventRollResults[resultKey] = {
+                                eventName: "Союзник в опасности",
+                                preAllies,
+                                dc,
+                                allyIndex,
+                                allyName,
+                                success,
+                                total,
+                                timestamp: Date.now()
+                            };
+
+                            const rerollMarker = previousResult || isRerollMessage
+                                ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                                : "";
+
+                            let resultMessage = `<h3>⚠️ Результат события: Союзник в опасности</h3>`;
+                            resultMessage += `<p><strong>Союзник:</strong> ${allyName}</p>`;
+                            resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+                            if (success) {
+                                resultMessage += `<p style="color:#d84315"><strong>✅ Успех!</strong> ${allyName} пропадает без вести на неделю, но не схвачен.</p>`;
+                            } else {
+                                resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> ${allyName} схвачен.</p>`;
+                            }
+                            resultMessage += rerollMarker;
+
+                            await ChatMessage.create({
+                                content: resultMessage,
+                                speaker: ChatMessage.getSpeaker(),
+                                flags: {
+                                    "pf2e-ts-adv-pf1ehr": {
+                                        isAllyDangerResult: true
+                                    }
+                                }
+                            });
+
+                            if (game.rebellionState?.isAllyDangerRoll) game.rebellionState = null;
+                            const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
+                            if (sheet) sheet.render();
+                        }
+                    }
+                }
+            }
+        }
+        if (isEventRollMessage("isDevilPerceptionRoll", "Дьявольское проникн.", "Дьявольское проникновение")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Дьявольское проникновение", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
                     const rebellionData = DataHandler.get();
-                    const traitorTeamDef = getTeamDefinition(teamType);
-                    
+                    const devilEvent = (rebellionData.events || []).find(e => e.name === "Дьявольское проникн." || e.name === "Дьявольское проникновение");
+
+                    const normalizeHistory = (value) => {
+                        if (Array.isArray(value)) {
+                            return value
+                                .map(v => Number(v))
+                                .filter(v => Number.isFinite(v) && v > 0);
+                        }
+                        if (typeof value === "string") {
+                            return value
+                                .split(",")
+                                .map(v => Number(v))
+                                .filter(v => Number.isFinite(v) && v > 0);
+                        }
+                        return [];
+                    };
+
+                    const totalWeeks = firstFiniteNumber(
+                        game.rebellionState?.devilWeeks,
+                        getContextValue("devilWeeks"),
+                        pendingContextValue("devilWeeks"),
+                        previousResult?.totalWeeks,
+                        game.rebellionDevilInfiltration?.devilWeeks,
+                        devilEvent?.devilWeeks
+                    );
+                    const rollHistory = normalizeHistory(
+                        game.rebellionState?.devilRollHistory ??
+                        getContextValue("devilRollHistory") ??
+                        pendingContextValue("devilRollHistory") ??
+                        previousResult?.rollHistory ??
+                        game.rebellionDevilInfiltration?.devilRollHistory ??
+                        devilEvent?.devilRollHistory
+                    );
+                    const sentinelName = game.rebellionState?.sentinelName ||
+                        getContextValue("sentinelName") ||
+                        pendingContextValue("sentinelName") ||
+                        previousResult?.sentinelName ||
+                        null;
+                    const perceptionBonus = firstFiniteNumber(
+                        game.rebellionState?.perceptionBonus,
+                        getContextValue("perceptionBonus"),
+                        pendingContextValue("perceptionBonus"),
+                        previousResult?.perceptionBonus,
+                        0
+                    ) ?? 0;
+
+                    if (totalWeeks === null || totalWeeks <= 0) {
+                        console.warn("Rebellion: Не удалось определить недели для события 'Дьявольское проникновение'", { totalWeeks, messageId: message.id });
+                    } else {
+                        const preNotoriety = firstFiniteNumber(previousResult?.preNotoriety, rebellionData.notoriety, 0);
+                        const dataForResolve = cloneData(rebellionData);
+                        dataForResolve.notoriety = preNotoriety;
+
+                        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+                        if (sheet && typeof sheet._resolveDevilPerceptionResult === "function") {
+                            const resolution = await sheet._resolveDevilPerceptionResult({
+                                data: dataForResolve,
+                                totalWeeks,
+                                rollHistory,
+                                sentinelName,
+                                perceptionBonus,
+                                perceptionTotal: roll.total,
+                                perceptionRoll: roll,
+                                isReroll: !!previousResult || isRerollMessage
+                            });
+
+                            eventRollResults[resultKey] = {
+                                eventName: "Дьявольское проникн.",
+                                preNotoriety,
+                                totalWeeks,
+                                rollHistory,
+                                sentinelName,
+                                perceptionBonus,
+                                perceptionTotal: roll.total,
+                                resolvedWeeks: resolution?.resolvedWeeks ?? null,
+                                loyaltyTotal: resolution?.loyaltyTotal ?? null,
+                                notorietyGain: resolution?.notorietyGain ?? null,
+                                timestamp: Date.now()
+                            };
+                        } else {
+                            console.error("Rebellion: Не найден RebellionSheet для обработки Дьявольского проникновения");
+                        }
+                    }
+                }
+            }
+        }
+        if (isEventRollMessage("isTraitorRoll", "Предатель")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Предатель", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 20;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
+                    const teamType = game.rebellionState?.teamType || getContextValue("teamType") || pendingContextValue("teamType") || previousResult?.teamType || null;
+                    const rebellionData = DataHandler.get();
+                    const preNotoriety = firstFiniteNumber(previousResult?.preNotoriety, rebellionData.notoriety, 0);
+                    const preTeams = cloneData(previousResult?.preTeams ?? rebellionData.teams ?? []);
+                    const teams = cloneData(preTeams);
+                    const traitorTeamDef = teamType ? getTeamDefinition(teamType) : null;
+
+                    let notGain = 0;
+                    if (!success) {
+                        const notRoll = new Roll("2d6");
+                        await notRoll.evaluate();
+                        notGain = notRoll.total;
+                        if (teamType) {
+                            const teamIndex = teams.findIndex(t => t.type === teamType);
+                            if (teamIndex !== -1) teams[teamIndex].disabled = true;
+                        }
+                    }
+
+                    await DataHandler.update({
+                        teams,
+                        notoriety: preNotoriety + (success ? 0 : notGain)
+                    });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Предатель",
+                        preNotoriety,
+                        preTeams,
+                        teamType,
+                        success,
+                        total,
+                        dc,
+                        notGain,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
                     let resultMessage = `<h3>🕵️ Результат события: Предатель</h3>`;
-                    
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+
                     if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель в команде ${traitorTeamDef.label} обнаружен и пойман до того, как смог нанести значительный ущерб.</p>`;
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель в команде ${traitorTeamDef?.label || teamType || "неизвестной"} обнаружен и пойман.</p>`;
                         resultMessage += `<p><strong>Что делать с предателем?</strong></p>`;
-                        
-                        // Кнопки выбора действий с предателем
                         resultMessage += `<div style="margin: 10px 0;">
-                            <button class="traitor-execute-btn" data-team-type="${teamType}" style="background: #f44336; color: white; margin: 2px; padding: 5px 10px; border: none; cursor: pointer;">
+                            <button class="traitor-execute-btn" data-team-type="${teamType || ""}" style="background: #f44336; color: white; margin: 2px; padding: 5px 10px; border: none; cursor: pointer;">
                                 ⚔️ Казнить
                             </button>
-                            <button class="traitor-exile-btn" data-team-type="${teamType}" style="background: #ff9800; color: white; margin: 2px; padding: 5px 10px; border: none; cursor: pointer;">
+                            <button class="traitor-exile-btn" data-team-type="${teamType || ""}" style="background: #ff9800; color: white; margin: 2px; padding: 5px 10px; border: none; cursor: pointer;">
                                 🚪 Изгнать
                             </button>
-                            <button class="traitor-imprison-btn" data-team-type="${teamType}" style="background: #9e9e9e; color: white; margin: 2px; padding: 5px 10px; border: none; cursor: pointer;">
+                            <button class="traitor-imprison-btn" data-team-type="${teamType || ""}" style="background: #9e9e9e; color: white; margin: 2px; padding: 5px 10px; border: none; cursor: pointer;">
                                 🔒 Тюрьма
                             </button>
                         </div>`;
                     } else {
-                        const notRoll = new Roll("2d6");
-                        await notRoll.evaluate();
-                        const notGain = notRoll.total;
-                        
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Предатель в команде ${traitorTeamDef.label} сбежал!</p>`;
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Предатель в команде ${traitorTeamDef?.label || teamType || "неизвестной"} сбежал.</p>`;
                         resultMessage += `<p><strong>Последствия:</strong> Команда недееспособна, +${notGain} Известность.</p>`;
-                        
-                        await DataHandler.update({
-                            notoriety: rebellionData.notoriety + notGain
-                        });
                     }
-                    
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker({ alias: "Серебряные Вороны" })
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем интерфейс
+
+                    if (game.rebellionState?.isTraitorRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000); // Небольшая задержка для корректного отображения
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Предатель
         }
-
-        // Обработка результатов броска "Казнь предателя"
-        if (game.rebellionState?.isTraitorExecuteLoyaltyRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Казнь предателя", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 20;
-                const success = total >= dc;
-                const teamType = game.rebellionState.teamType;
-                
-                console.log(`Rebellion: Результат Казнь предателя - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
+        if (isEventRollMessage("isTraitorExecuteLoyaltyRoll", "Казнь предателя")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Казнь предателя", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 20;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
+                    const teamType = game.rebellionState?.teamType || getContextValue("teamType") || pendingContextValue("teamType") || previousResult?.teamType || null;
                     const rebellionData = DataHandler.get();
-                    const traitorTeamDef = getTeamDefinition(teamType);
-                    
-                    let resultMessage = `<h3>⚔️ Результат проверки морального духа</h3>`;
-                    
-                    if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Серебряные Вороны понимают необходимость казни. Моральный дух не пострадал.</p>`;
-                    } else {
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Казнь предателя нанесла ущерб моральному духу.</p>`;
-                        
-                        // Добавляем постоянный эффект "Низкий боевой дух"
-                        const currentEvents = rebellionData.events || [];
+                    const preEvents = cloneData(previousResult?.preEvents ?? rebellionData.events ?? []);
+                    const events = cloneData(preEvents);
+
+                    if (!success) {
                         const lowMoraleEvent = {
                             name: "Низкий боевой дух",
                             desc: "Постоянный низкий боевой дух после казни предателя. -4 Верность. Смягчение: Выступление КС 20 снижает до -2.",
@@ -2032,403 +1973,615 @@ Hooks.once("ready", () => {
                             mitigate: "performance",
                             dc: 20
                         };
-                        
-                        // Проверяем, есть ли уже событие "Низкий боевой дух"
-                        const existingMoraleIndex = currentEvents.findIndex(e => e.name === "Низкий боевой дух");
-                        if (existingMoraleIndex !== -1) {
-                            // Заменяем существующее событие на постоянное
-                            currentEvents[existingMoraleIndex] = lowMoraleEvent;
-                        } else {
-                            // Добавляем новое событие
-                            currentEvents.push(lowMoraleEvent);
-                        }
-                        
-                        await DataHandler.update({ events: currentEvents });
-                        resultMessage += `<p><strong>Эффект:</strong> Постоянный "Низкий боевой дух" (-4 Верность). Можно смягчить проверкой Выступления КС 20.</p>`;
+
+                        const existingMoraleIndex = events.findIndex(e => e.name === "Низкий боевой дух");
+                        if (existingMoraleIndex !== -1) events[existingMoraleIndex] = lowMoraleEvent;
+                        else events.push(lowMoraleEvent);
                     }
-                    
+
+                    await DataHandler.update({ events });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Казнь предателя",
+                        preEvents,
+                        teamType,
+                        success,
+                        total,
+                        dc,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
+                    let resultMessage = `<h3>⚔️ Результат проверки морального духа</h3>`;
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+                    if (success) {
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Серебряные Вороны принимают необходимость казни. Моральный дух не пострадал.</p>`;
+                    } else {
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Казнь предателя нанесла ущерб моральному духу.</p>`;
+                        resultMessage += `<p><strong>Эффект:</strong> Добавлено постоянное событие "Низкий боевой дух" (-4 Верность).</p>`;
+                    }
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker({ alias: "Серебряные Вороны" })
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем интерфейс
+
+                    if (game.rebellionState?.isTraitorExecuteLoyaltyRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000);
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Казнь предателя
         }
-
-        // Обработка результатов броска "Изгнание предателя"
-        if (game.rebellionState?.isTraitorExileSecurityRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Изгнание предателя", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 25;
-                const success = total >= dc;
-                const teamType = game.rebellionState.teamType;
-                
-                console.log(`Rebellion: Результат Изгнание предателя - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
+        if (isEventRollMessage("isTraitorExileSecurityRoll", "Изгнание предателя")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Изгнание предателя", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 25;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
                     const rebellionData = DataHandler.get();
-                    const traitorTeamDef = getTeamDefinition(teamType);
-                    
+                    const preNotoriety = firstFiniteNumber(previousResult?.preNotoriety, rebellionData.notoriety, 0);
+
+                    let notGain = 0;
+                    if (!success) {
+                        const notRoll = new Roll("2d6");
+                        await notRoll.evaluate();
+                        notGain = notRoll.total;
+                    }
+
+                    await DataHandler.update({ notoriety: preNotoriety + (success ? 0 : notGain) });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Изгнание предателя",
+                        preNotoriety,
+                        success,
+                        total,
+                        dc,
+                        notGain,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
                     let resultMessage = `<h3>🚪 Результат изгнания предателя</h3>`;
-                    
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
                     if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель убежден никогда не возвращаться в Кинтарго. Угроза устранена.</p>`;
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель убежден никогда не возвращаться в Кинтарго.</p>`;
                     } else {
-                        const notRoll = new Roll("2d6");
-                        await notRoll.evaluate();
-                        const notGain = notRoll.total;
-                        
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Предатель пробрался обратно в город и доложил Барзиллаю Труну.</p>`;
-                        resultMessage += `<p><strong>Последствия:</strong> +${notGain} Известность.</p>`;
-                        
-                        await DataHandler.update({
-                            notoriety: rebellionData.notoriety + notGain
-                        });
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Предатель вернулся и доложил врагу. +${notGain} Известность.</p>`;
                     }
-                    
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker({ alias: "Серебряные Вороны" })
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем интерфейс
+
+                    if (game.rebellionState?.isTraitorExileSecurityRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000);
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Изгнание предателя
         }
+        if (isEventRollMessage("isTraitorPrisonSecrecyRoll", "Содержание предателя в тюрьме")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Содержание предателя в тюрьме", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 20;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
+                    const teamType = game.rebellionState?.teamType || getContextValue("teamType") || pendingContextValue("teamType") || previousResult?.teamType || null;
+                    const eventIndex = Number(game.rebellionState?.eventIndex ?? getContextValue("eventIndex") ?? pendingContextValue("eventIndex") ?? previousResult?.eventIndex ?? -1);
 
-        // Обработка результатов броска "Содержание предателя в тюрьме"
-        if (game.rebellionState?.isTraitorPrisonSecrecyRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Содержание предателя", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 20;
-                const success = total >= dc;
-                const teamType = game.rebellionState.teamType;
-                const eventIndex = game.rebellionState.eventIndex;
-                
-                console.log(`Rebellion: Результат Содержание предателя - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
                     const rebellionData = DataHandler.get();
-                    const traitorTeamDef = getTeamDefinition(teamType);
-                    
+                    const preEvents = cloneData(previousResult?.preEvents ?? rebellionData.events ?? []);
+                    const preNotoriety = firstFiniteNumber(previousResult?.preNotoriety, rebellionData.notoriety, 0);
+                    const events = cloneData(preEvents);
+
+                    let notGain = 0;
+                    if (!success) {
+                        const notRoll = new Roll("2d6");
+                        await notRoll.evaluate();
+                        notGain = notRoll.total;
+
+                        if (eventIndex >= 0 && eventIndex < events.length) {
+                            events.splice(eventIndex, 1);
+                        } else {
+                            const fallbackIndex = events.findIndex(e => String(e?.name || "").toLowerCase().includes("предатель") && String(e?.name || "").toLowerCase().includes("тюрьм"));
+                            if (fallbackIndex !== -1) events.splice(fallbackIndex, 1);
+                        }
+                    }
+
+                    await DataHandler.update({
+                        events,
+                        notoriety: preNotoriety + (success ? 0 : notGain)
+                    });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Содержание предателя в тюрьме",
+                        preEvents,
+                        preNotoriety,
+                        teamType,
+                        eventIndex,
+                        success,
+                        total,
+                        dc,
+                        notGain,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
+                    const traitorTeamDef = teamType ? getTeamDefinition(teamType) : null;
                     let resultMessage = `<h3>🔒 Результат проверки содержания предателя</h3>`;
-                    
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
                     if (success) {
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель из команды ${traitorTeamDef.label} остается в заключении.</p>`;
-                        resultMessage += `<p>Тюремное заключение продолжается. Проверка потребуется снова в следующую фазу содержания.</p>`;
-                        resultMessage += `<p>Вы по-прежнему можете переубедить, казнить или изгнать предателя.</p>`;
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель из команды ${traitorTeamDef?.label || teamType || "неизвестной"} остается в заключении.</p>`;
                     } else {
-                        const notRoll = new Roll("2d6");
-                        await notRoll.evaluate();
-                        const notGain = notRoll.total;
-                        
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Предатель сбежал из заключения!</p>`;
-                        resultMessage += `<p><strong>Последствия:</strong> +${notGain} Известность.</p>`;
-                        
-                        // Удаляем эффект "Предатель в тюрьме"
-                        const events = JSON.parse(JSON.stringify(rebellionData.events || []));
-                        events.splice(eventIndex, 1);
-                        
-                        await DataHandler.update({
-                            events: events,
-                            notoriety: rebellionData.notoriety + notGain
-                        });
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Предатель сбежал из заключения. +${notGain} Известность.</p>`;
                     }
-                    
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker({ alias: "Серебряные Вороны" })
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем интерфейс
+
+                    if (game.rebellionState?.isTraitorPrisonSecrecyRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000);
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Содержание предателя
         }
-
-        // Обработка результатов броска "Переубеждение предателя"
-        if (game.rebellionState?.isTraitorPersuadeAttemptRoll && message.isRoll) {
-            console.log("Rebellion: Обработка результата броска Переубеждение предателя", message);
-            
-            const roll = message.rolls?.[0];
-            if (roll) {
-                const total = roll.total;
-                const dc = 20;
-                const success = total >= dc;
-                const teamType = game.rebellionState.teamType;
-                const eventIndex = game.rebellionState.eventIndex;
-                
-                console.log(`Rebellion: Результат Переубеждение предателя - ${total} vs DC ${dc}, успех: ${success}`);
-                
-                // Применяем результат
-                setTimeout(async () => {
+        if (isEventRollMessage("isTraitorPersuadeAttemptRoll", "Переубеждение предателя")) {
+            if (!processedEventMessages.has(message.id)) {
+                console.log("Rebellion: Обработка результата броска Переубеждение предателя", message);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    processedEventMessages.add(message.id);
+                    const total = roll.total;
+                    const dc = 20;
+                    const success = total >= dc;
+                    const resultKey = getEventResultKey();
+                    const previousResult = eventRollResults[resultKey] ?? null;
+                    const teamType = game.rebellionState?.teamType || getContextValue("teamType") || pendingContextValue("teamType") || previousResult?.teamType || null;
+                    const eventIndex = Number(game.rebellionState?.eventIndex ?? getContextValue("eventIndex") ?? pendingContextValue("eventIndex") ?? previousResult?.eventIndex ?? -1);
                     const rebellionData = DataHandler.get();
-                    const traitorTeamDef = getTeamDefinition(teamType);
-                    
-                    let resultMessage = `<h3>✨ Результат переубеждения предателя</h3>`;
-                    
+                    const preTeams = cloneData(previousResult?.preTeams ?? rebellionData.teams ?? []);
+                    const preEvents = cloneData(previousResult?.preEvents ?? rebellionData.events ?? []);
+
+                    const teams = cloneData(preTeams);
+                    const events = cloneData(preEvents);
+                    let supportersGain = 0;
+
                     if (success) {
                         const supportersRoll = new Roll("1d6");
                         await supportersRoll.evaluate();
-                        const supportersGain = supportersRoll.total;
-                        
-                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель из команды ${traitorTeamDef.label} переубежден!</p>`;
-                        resultMessage += `<p><strong>Результаты:</strong></p>`;
-                        resultMessage += `<ul>
-                            <li>Предатель меняет верность</li>
-                            <li>Команда ${traitorTeamDef.label} восстановлена и больше не недееспособна</li>
-                            <li>+${supportersGain} сторонников в начале следующей фазы содержания</li>
-                            <li>Больше нет угрозы увеличения Известности от этого предателя</li>
-                        </ul>`;
-                        
-                        // Восстанавливаем команду
-                        const teams = JSON.parse(JSON.stringify(rebellionData.teams));
-                        const teamIndex = teams.findIndex(t => t.type === teamType);
+                        supportersGain = supportersRoll.total;
+
+                        const teamIndex = teamType ? teams.findIndex(t => t.type === teamType) : -1;
                         if (teamIndex !== -1) {
                             teams[teamIndex].disabled = false;
                         }
-                        
-                        // Удаляем эффект "Предатель в тюрьме"
-                        const events = JSON.parse(JSON.stringify(rebellionData.events || []));
-                        events.splice(eventIndex, 1);
-                        
-                        // Добавляем эффект бонусных сторонников (активируется в следующую фазу содержания)
+
+                        if (eventIndex >= 0 && eventIndex < events.length) {
+                            events.splice(eventIndex, 1);
+                        } else {
+                            const fallbackIndex = events.findIndex(e => String(e?.name || "").toLowerCase().includes("предатель") && String(e?.name || "").toLowerCase().includes("тюрьм"));
+                            if (fallbackIndex !== -1) events.splice(fallbackIndex, 1);
+                        }
+
                         events.push({
                             name: "Бонус от переубеждения",
                             desc: `+${supportersGain} сторонников от успешного переубеждения предателя`,
-                            weekStarted: rebellionData.week + 1, // Активируется в следующую неделю
+                            weekStarted: (rebellionData.week ?? 0) + 1,
                             duration: 1,
                             supportersBonus: supportersGain,
                             needsSupportersCollection: true
                         });
-                        
-                        await DataHandler.update({
-                            teams: teams,
-                            events: events
-                        });
-                        
-                        // Force sheet update to refresh maintenance event count
-                        setTimeout(() => {
-                            const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
-                            if (sheet) {
-                                sheet.render(false); // Force refresh without closing
-                            }
-                        }, 100);
-                    } else {
-                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Попытка переубеждения не удалась.</p>`;
-                        resultMessage += `<p>Предатель остается в заключении. Можете попробовать снова или выбрать другой вариант (казнь, изгнание).</p>`;
                     }
-                    
+
+                    await DataHandler.update({ teams, events });
+
+                    eventRollResults[resultKey] = {
+                        eventName: "Переубеждение предателя",
+                        preTeams,
+                        preEvents,
+                        teamType,
+                        eventIndex,
+                        success,
+                        total,
+                        dc,
+                        supportersGain,
+                        timestamp: Date.now()
+                    };
+
+                    const rerollMarker = previousResult || isRerollMessage
+                        ? `<p style="color:#1565c0"><strong>🔄 Результат обновлен после переброса.</strong></p>`
+                        : "";
+
+                    const traitorTeamDef = teamType ? getTeamDefinition(teamType) : null;
+                    let resultMessage = `<h3>✨ Результат переубеждения предателя</h3>`;
+                    resultMessage += `<p><strong>${total}</strong> против КС <strong>${dc}</strong></p>`;
+
+                    if (success) {
+                        resultMessage += `<p style="color:green"><strong>✅ Успех!</strong> Предатель из команды ${traitorTeamDef?.label || teamType || "неизвестной"} переубежден.</p>`;
+                        resultMessage += `<p>Команда восстановлена. В следующей фазе содержания можно получить +${supportersGain} сторонников.</p>`;
+                    } else {
+                        resultMessage += `<p style="color:red"><strong>❌ Провал!</strong> Переубеждение не удалось. Предатель остается в заключении.</p>`;
+                    }
+                    resultMessage += rerollMarker;
+
                     await ChatMessage.create({
                         content: resultMessage,
                         speaker: ChatMessage.getSpeaker({ alias: "Серебряные Вороны" })
                     });
-                    
-                    // Очищаем состояние
-                    game.rebellionState = null;
-                    
-                    // Обновляем интерфейс
+
+                    if (game.rebellionState?.isTraitorPersuadeAttemptRoll) game.rebellionState = null;
                     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
                     if (sheet) sheet.render();
-                    
-                }, 1000);
+                }
             }
-            
-            return; // Не обрабатываем reroll кнопки для Переубеждение предателя
         }
-        
+
+        // Обработка результатов проверки "Поиск пропавшей команды"
+        const missingSearchContext = message.flags?.pf2e?.context ?? {};
+        const missingSearchFlags = message.flags?.["pf2e-ts-adv-pf1ehr"] ?? {};
+        const lowerFlavor = (message.flavor || "").toLowerCase();
+        const lowerContent = (message.content || "").toLowerCase();
+        const hasPendingMissingSearch = !!(game.rebellionMissingSearchMap && Object.keys(game.rebellionMissingSearchMap).length > 0);
+        const missingSearchByFlavor = hasPendingMissingSearch &&
+            (lowerFlavor.includes("поиск пропавшей команды") || lowerContent.includes("поиск пропавшей команды"));
+        if ((missingSearchContext.isMissingTeamSearchRoll || missingSearchFlags.isMissingTeamSearchRoll || missingSearchByFlavor) && message.isRoll) {
+            const processedRolls = game.rebellionProcessedMissingRolls ?? (game.rebellionProcessedMissingRolls = new Set());
+            const alreadyProcessed = processedRolls.has(message.id);
+            if (!alreadyProcessed) {
+                processedRolls.add(message.id);
+                const roll = message.rolls?.[0];
+                if (roll) {
+                    const pendingEntries = Object.entries(game.rebellionMissingSearchMap || {});
+                    const pendingByLabel = pendingEntries.find(([, value]) => {
+                        const label = String(value?.teamLabel || "").toLowerCase();
+                        return !!label && (lowerFlavor.includes(label) || lowerContent.includes(label));
+                    });
+                    const fallbackPending = pendingByLabel || pendingEntries[0] || null;
+
+                    const missingSearchKey = missingSearchContext.missingSearchKey || missingSearchFlags.missingSearchKey || fallbackPending?.[0] || `missing:${message.id}`;
+                    const mapEntry = game.rebellionMissingSearchMap?.[missingSearchKey] ?? fallbackPending?.[1] ?? {};
+                    const teamType = missingSearchContext.teamType || missingSearchFlags.teamType || mapEntry?.teamType || null;
+                    const teamLabel = missingSearchContext.teamLabel || missingSearchFlags.teamLabel || mapEntry?.teamLabel || teamType || "Команда";
+                    console.log("Rebellion: Processing missing team search roll", { missingSearchKey, teamType, teamLabel, messageId: message.id });
+
+                    const total = roll.total;
+                    const d20Result = roll.dice?.find(d => d.faces === 20)?.results?.find(r => r.active && !r.discarded)?.result
+                        ?? roll.dice?.[0]?.results?.[0]?.result
+                        ?? total;
+                    const outcome = total >= 15 ? "success" : d20Result === 1 ? "criticalFailure" : "failure";
+                    const isRerollMessage = !!missingSearchContext.isReroll || !!missingSearchFlags.isReroll || !!message.flags?.pf2e?.context?.isReroll;
+
+                    try {
+                        const rebellionData = DataHandler.get();
+                        const teams = JSON.parse(JSON.stringify(rebellionData.teams || []));
+                        let resolvedTeamType = teamType;
+                        let resolvedTeamLabel = teamLabel;
+                        const teamSnapshot = mapEntry?.teamSnapshot ? foundry.utils.deepClone(mapEntry.teamSnapshot) : null;
+                        const previousResult = game.rebellionMissingSearchResults?.[missingSearchKey] ?? null;
+
+                        // If this check was rerolled, rollback previously applied outcome.
+                        if (previousResult?.outcome === "success") {
+                            const previousIndex = teams.findIndex(t => t.missingSearchKey === missingSearchKey);
+                            if (previousIndex !== -1) {
+                                teams[previousIndex].missing = teamSnapshot?.missing ?? true;
+                                teams[previousIndex].disabled = teamSnapshot?.disabled ?? false;
+                                teams[previousIndex].canAutoRecover = teamSnapshot?.canAutoRecover ?? false;
+                            }
+                        } else if (previousResult?.outcome === "criticalFailure") {
+                            const alreadyRestored = teams.some(t => t.missingSearchKey === missingSearchKey);
+                            if (!alreadyRestored && teamSnapshot) {
+                                const restoredTeam = foundry.utils.deepClone(teamSnapshot);
+                                restoredTeam.missingSearchKey = missingSearchKey;
+                                teams.push(restoredTeam);
+                            }
+                        }
+
+                        if (!resolvedTeamType && game.rebellionMissingSearchMap?.[missingSearchKey]) {
+                            resolvedTeamType = game.rebellionMissingSearchMap[missingSearchKey].teamType || null;
+                            resolvedTeamLabel = game.rebellionMissingSearchMap[missingSearchKey].teamLabel || resolvedTeamLabel;
+                        }
+
+                        let teamIndex = teams.findIndex(t => t.missingSearchKey === missingSearchKey);
+                        if (teamIndex === -1 && resolvedTeamType) {
+                            teamIndex = teams.findIndex(t => t.type === resolvedTeamType);
+                        }
+                        if (teamIndex === -1 && teamSnapshot) {
+                            const restoredTeam = foundry.utils.deepClone(teamSnapshot);
+                            restoredTeam.missingSearchKey = missingSearchKey;
+                            teams.push(restoredTeam);
+                            teamIndex = teams.length - 1;
+                        }
+                        if (teamIndex === -1) {
+                            return;
+                        }
+
+                        if (outcome === "success") {
+                            teams[teamIndex].missing = false;
+                            teams[teamIndex].disabled = true;
+                            teams[teamIndex].canAutoRecover = true;
+                        } else if (outcome === "criticalFailure") {
+                            teams.splice(teamIndex, 1);
+                        } else {
+                            teams[teamIndex].missing = true;
+                        }
+
+                        // Once reroll has happened, this outcome is final for the key.
+                        if (isRerollMessage) {
+                            for (const team of teams) {
+                                if (team.missingSearchKey === missingSearchKey) delete team.missingSearchKey;
+                            }
+                            if (game.rebellionMissingSearchMap) delete game.rebellionMissingSearchMap[missingSearchKey];
+                        }
+
+                        await DataHandler.update({ teams });
+
+                        game.rebellionMissingSearchResults ??= {};
+                        game.rebellionMissingSearchResults[missingSearchKey] = {
+                            outcome,
+                            teamType: resolvedTeamType,
+                            teamLabel: resolvedTeamLabel,
+                            total,
+                            messageId: message.id,
+                            timestamp: Date.now()
+                        };
+
+                        const outcomeText = outcome === "success"
+                            ? `<p style="color:#2e7d32; margin: 8px 0 0 0;"><strong>✅ Успех!</strong> Команда найдена, но недееспособна до следующей недели.</p>`
+                            : outcome === "criticalFailure"
+                                ? `<p style="color:#b71c1c; margin: 8px 0 0 0;"><strong>💥 Критический провал!</strong> Команда потеряна навсегда.</p>`
+                                : `<p style="color:#d32f2f; margin: 8px 0 0 0;"><strong>❌ Провал!</strong> Команда не найдена и остается пропавшей.</p>`;
+                        const rerollMarker = previousResult
+                            ? `<p style="color:#1565c0; margin: 8px 0 0 0;"><strong>🔄 Обновлено после переброса.</strong></p>`
+                            : "";
+
+                        const resultMessage = `
+                            <div style="border: 2px solid #ff9800; padding: 12px; border-radius: 10px; background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);">
+                                <h5 style="margin: 0 0 8px 0; color: #e65100;">Поиск пропавшей команды: ${resolvedTeamLabel}</h5>
+                                <div style="font-size: 1.05em;"><strong>${total}</strong> против КС <strong>15</strong></div>
+                                ${outcomeText}
+                                ${rerollMarker}
+                            </div>
+                        `;
+
+                        await ChatMessage.create({
+                            content: resultMessage,
+                            speaker: ChatMessage.getSpeaker(),
+                            flags: {
+                                "pf2e-ts-adv-pf1ehr": {
+                                    isMissingTeamSearchResult: true,
+                                    missingSearchKey,
+                                    outcome
+                                }
+                            }
+                        });
+
+                        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet);
+                        if (sheet) sheet.render();
+                    } catch (error) {
+                        console.error("Rebellion: Ошибка обработки поиска пропавшей команды:", error);
+                    }
+                }
+            }
+            // Кнопки переброса обрабатываются ниже в общем блоке.
+        }
+
         if (!message.isRoll) return;
-        
+
         console.log("Rebellion: Checking message for reroll buttons", message);
-        
+
         const rebellionData = DataHandler.get();
         const securityReroll = DataHandler.getRerollForCheck(rebellionData, 'security');
         const loyaltyReroll = DataHandler.getRerollForCheck(rebellionData, 'loyalty');
         const secrecyReroll = DataHandler.getRerollForCheck(rebellionData, 'secrecy');
-        
-        console.log("Rebellion: Reroll availability", { 
-            security: securityReroll.available, 
+
+        console.log("Rebellion: Reroll availability", {
+            security: securityReroll.available,
             loyalty: loyaltyReroll.available,
-            secrecy: secrecyReroll.available 
+            secrecy: secrecyReroll.available
         });
         console.log("Rebellion: Security reroll details", securityReroll);
         console.log("Rebellion: Loyalty reroll details", loyaltyReroll);
         console.log("Rebellion: Secrecy reroll details", secrecyReroll);
-        
-        const context = message.flags?.pf2e?.context;
+
+        const context = message.flags?.pf2e?.context ?? {};
+        const moduleFlags = message.flags?.["pf2e-ts-adv-pf1ehr"] ?? {};
         const flavor = message.flavor?.toLowerCase() || '';
         const content = message.content?.toLowerCase() || '';
-        
+        const contextText = JSON.stringify(context).toLowerCase();
+
+        // Do not offer reroll for rerolled messages
+        if (context.isReroll || moduleFlags.isReroll) return;
+
         console.log("Rebellion: Message context and flavor", { context, flavor });
-        
-        // Check for security check (Chuko)
-        if (securityReroll.available) {
-            const isSecurityCheck = context?.skill === 'security' || 
-                                   context?.action === 'security' ||
-                                   flavor.includes('безопасность') ||
-                                   flavor.includes('security') ||
-                                   content.includes('безопасность') ||
-                                   content.includes('security') ||
-                                   (flavor.includes('organization') && flavor.includes('security')) ||
-                                   (content.includes('organization') && content.includes('security'));
 
-            console.log("Rebellion: Is security check?", isSecurityCheck);
-            if (isSecurityCheck) {
-                const rerollButton = $(`
-                    <button class="rebellion-reroll-btn" 
-                            data-message-id="${message.id}" 
-                            data-type="security"
-                            style="margin: 5px; padding: 4px 8px; background: #4a90e2; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
-                        🔄 Переброс Чуко
-                    </button>
-                `);
-                html.find('.message-content').append(rerollButton);
-                console.log("Rebellion: Added Chuko reroll button");
-            }
-        }
-        
-        // Check for loyalty check (Shensen)
-        if (loyaltyReroll.available) {
-            const isLoyaltyCheck = context?.skill === 'loyalty' || 
-                                  context?.action === 'loyalty' ||
-                                  flavor.includes('лояльность') ||
-                                  flavor.includes('loyalty') ||
-                                  flavor.includes('верность') ||
-                                  content.includes('лояльность') ||
-                                  content.includes('loyalty') ||
-                                  content.includes('верность') ||
-                                  (flavor.includes('organization') && flavor.includes('loyalty')) ||
-                                  (content.includes('organization') && content.includes('loyalty'));
+        const normalizeCheckType = (value) => {
+            if (typeof value !== "string") return null;
+            const normalized = value.toLowerCase();
+            if (normalized.includes("security") || normalized.includes("безопас")) return "security";
+            if (normalized.includes("loyalty") || normalized.includes("лояль") || normalized.includes("верност")) return "loyalty";
+            if (normalized.includes("secrecy") || normalized.includes("секрет") || normalized.includes("тайност")) return "secrecy";
+            return null;
+        };
 
-            console.log("Rebellion: Is loyalty check?", isLoyaltyCheck);
-            if (isLoyaltyCheck) {
-                const rerollButton = $(`
-                    <button class="rebellion-reroll-btn" 
-                            data-message-id="${message.id}" 
-                            data-type="loyalty"
-                            style="margin: 5px; padding: 4px 8px; background: #e91e63; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
-                        🔄 Переброс Шенсен
-                    </button>
-                `);
-                html.find('.message-content').append(rerollButton);
-                console.log("Rebellion: Added Shensen reroll button");
-            }
-        }
-        
-        // Check for secrecy check (Strea Vestori)
-        if (secrecyReroll.available) {
-            const isSecrecyCheck = context?.skill === 'secrecy' || 
-                                  context?.action === 'secrecy' ||
-                                  flavor.includes('секретность') ||
-                                  flavor.includes('secrecy') ||
-                                  flavor.includes('тайность') ||
-                                  content.includes('секретность') ||
-                                  content.includes('secrecy') ||
-                                  content.includes('тайность') ||
-                                  (flavor.includes('organization') && flavor.includes('secrecy')) ||
-                                  (content.includes('organization') && content.includes('secrecy'));
+        const getNativeCheckType = () => {
+            const nestedContext = context?.context ?? {};
+            const candidates = [
+                context?.skill,
+                context?.action,
+                context?.identifier,
+                context?.slug,
+                context?.statistic,
+                nestedContext?.skill,
+                nestedContext?.action,
+                nestedContext?.identifier,
+                nestedContext?.slug,
+                message.flags?.pf2e?.modifierName
+            ];
 
-            console.log("Rebellion: Is secrecy check?", isSecrecyCheck);
-            if (isSecrecyCheck) {
-                const rerollButton = $(`
-                    <button class="rebellion-reroll-btn" 
-                            data-message-id="${message.id}" 
-                            data-type="secrecy"
-                            style="margin: 5px; padding: 4px 8px; background: #9c27b0; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
-                        🔄 Переброс Стреа
-                    </button>
-                `);
-                html.find('.message-content').append(rerollButton);
-                console.log("Rebellion: Added Strea reroll button");
+            for (const candidate of candidates) {
+                const matched = normalizeCheckType(candidate);
+                if (matched) return matched;
             }
+
+            if (Array.isArray(context?.options)) {
+                for (const option of context.options) {
+                    const matched = normalizeCheckType(option);
+                    if (matched) return matched;
+                }
+            }
+
+            return null;
+        };
+
+        const detectedType = getNativeCheckType();
+        console.log("Rebellion: Detected check type for reroll", detectedType);
+
+        // Fallback for mitigation rolls where skill is not exposed in standard PF2e context fields
+        const isMitigationRoll =
+            !!moduleFlags.isMitigation ||
+            !!context.isMitigation ||
+            !!context?.context?.isMitigation ||
+            !!game.rebellionState?.isMitigation;
+        const targetEventName =
+            moduleFlags.eventName ||
+            context.eventName ||
+            context?.context?.eventName ||
+            game.rebellionState?.eventName ||
+            null;
+        const mitigationSkill = isMitigationRoll && targetEventName
+            ? rebellionData.events?.find(e => e.name === targetEventName)?.mitigate ?? null
+            : null;
+        const mitigationDetectedType = normalizeCheckType(mitigationSkill);
+        const eventTypeByName = {
+            "Стукач": "loyalty",
+            "Предатель": "loyalty",
+            "Казнь предателя": "loyalty",
+            "Переубеждение предателя": "loyalty",
+            "Провальный протест": "security",
+            "Катастроф. миссия": "security",
+            "Катастрофическая миссия": "security",
+            "Союзник в опасности": "security",
+            "Изгнание предателя": "security",
+            "Содержание предателя в тюрьме": "secrecy"
+        };
+        const eventTypeByFlag =
+            (hasContextFlag("isStukachRoll") || hasContextFlag("isTraitorRoll") || hasContextFlag("isTraitorExecuteLoyaltyRoll") || hasContextFlag("isTraitorPersuadeAttemptRoll")) ? "loyalty" :
+                (hasContextFlag("isFailedProtestRoll") || hasContextFlag("isCatastrophicMissionRoll") || hasContextFlag("isAllyDangerRoll") || hasContextFlag("isTraitorExileSecurityRoll") || hasContextFlag("isMissingTeamSearchRoll")) ? "security" :
+                    hasContextFlag("isTraitorPrisonSecrecyRoll") ? "secrecy" :
+                        null;
+        const eventDetectedType = eventTypeByName[targetEventName] || eventTypeByName[contextEventName] || eventTypeByFlag || null;
+        const resolvedType = detectedType || mitigationDetectedType || eventDetectedType;
+        console.log("Rebellion: Mitigation-derived reroll type", { isMitigationRoll, targetEventName, mitigationSkill, mitigationDetectedType, eventDetectedType, detectedType, resolvedType });
+
+        const rerollConfig = {
+            security: {
+                available: securityReroll.available,
+                aliases: ["безопасность", "security"],
+                color: "#4a90e2",
+                buttonLabel: "Переброс Чуко"
+            },
+            loyalty: {
+                available: loyaltyReroll.available,
+                aliases: ["лояльность", "loyalty", "верность"],
+                color: "#e91e63",
+                buttonLabel: "Переброс Шенсен"
+            },
+            secrecy: {
+                available: secrecyReroll.available,
+                aliases: ["секретность", "secrecy", "тайность"],
+                color: "#9c27b0",
+                buttonLabel: "Переброс Стреа"
+            }
+        };
+
+        for (const [checkType, config] of Object.entries(rerollConfig)) {
+            if (!config.available) continue;
+
+            const fallbackTextMatch = config.aliases.some(alias =>
+                contextText.includes(alias) ||
+                flavor.includes(alias) ||
+                content.includes(alias)
+            );
+            const isTargetCheck = resolvedType ? resolvedType === checkType : fallbackTextMatch;
+
+            if (!isTargetCheck) continue;
+
+            const rerollButton = $(`
+                <button class="rebellion-reroll-btn" 
+                        data-message-id="${message.id}" 
+                        data-type="${checkType}"
+                        style="margin: 5px; padding: 4px 8px; background: ${config.color}; color: white; border: none; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                    ${config.buttonLabel}
+                </button>
+            `);
+            html.find('.message-content').append(rerollButton);
+            console.log(`Rebellion: Added reroll button for ${checkType}`);
+
+            // When type was detected from flags/state, no need to evaluate other check types.
+            if (resolvedType) break;
         }
-        
+
 
     });
 
     // Handle reroll button clicks
     $(document).on('click', '.rebellion-reroll-btn', async (ev) => {
         ev.preventDefault();
-        
+
         const messageId = $(ev.currentTarget).data('message-id');
         const rerollType = $(ev.currentTarget).data('type');
-        
+
         console.log("Rebellion: Reroll button clicked", { messageId, rerollType });
-        
+
         const message = game.messages.get(messageId);
         if (!message || !message.isRoll) return;
-        
+
         const data = DataHandler.get();
         const rerollInfo = DataHandler.getRerollForCheck(data, rerollType);
-        
+
         if (!rerollInfo.available) {
             ui.notifications.warn("Переброс уже использован на этой неделе!");
             return;
         }
-        
+
         let allyName = '';
         let skillName = '';
-        let colorScheme = {};
-        
+
         if (rerollType === 'security') {
             allyName = 'Чуко';
             skillName = 'Безопасность';
-            colorScheme = {
-                border: '#4a90e2',
-                background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
-                color: '#1976d2'
-            };
         } else if (rerollType === 'loyalty') {
             allyName = 'Шенсен';
             skillName = 'Лояльность';
-            colorScheme = {
-                border: '#e91e63',
-                background: 'linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%)',
-                color: '#c2185b'
-            };
         } else if (rerollType === 'secrecy') {
             allyName = 'Стреа Вестори';
             skillName = 'Секретность';
-            colorScheme = {
-                border: '#9c27b0',
-                background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)',
-                color: '#7b1fa2'
-            };
         }
-        
+
         // Confirm reroll
         const confirmed = await Dialog.confirm({
             title: `Переброс ${allyName}`,
@@ -2439,51 +2592,177 @@ Hooks.once("ready", () => {
         });
 
         if (!confirmed) return;
-        
+
         // Get original roll data
         const originalRoll = message.rolls[0];
-        const originalTotal = originalRoll.total;
-        
-        // Extract bonus from original roll
-        let bonus = 0;
-        if (originalRoll.terms && originalRoll.terms.length > 0) {
-            const dieTerm = originalRoll.terms.find(t => t.faces === 20);
-            if (dieTerm && dieTerm.results && dieTerm.results[0]) {
-                bonus = originalTotal - dieTerm.results[0].result;
+        const originalTotal = originalRoll?.total ?? 0;
+
+        // Prefer PF2e native reroll handling to preserve check context and DoS.
+        const hasNativeReroll = !!game.pf2e?.Check?.rerollFromMessage;
+        if (!hasNativeReroll) {
+            ui.notifications.error("Нативный PF2E переброс недоступен.");
+            return;
+        }
+
+        const moduleFlags = message.flags?.["pf2e-ts-adv-pf1ehr"] ?? {};
+        const context = message.flags?.pf2e?.context ?? {};
+        const nestedContext = context?.context ?? {};
+        const getContextValue = (key) => moduleFlags[key] ?? context[key] ?? nestedContext[key];
+        const eventName = getContextValue("eventName") ?? null;
+        const isMitigationContext = !!moduleFlags.isMitigation || !!context.isMitigation || !!context?.context?.isMitigation;
+        const pendingRerolls = game.rebellionPendingRerolls ?? (game.rebellionPendingRerolls = []);
+        const pendingEntry = {
+            source: "module-reroll",
+            originalMessageId: messageId,
+            rerollType,
+            eventName,
+            startedAt: Date.now(),
+            resolved: false,
+            contextData: {
+                isMitigation: isMitigationContext,
+                eventName,
+                isStukachRoll: getContextValue("isStukachRoll") === true,
+                isFailedProtestRoll: getContextValue("isFailedProtestRoll") === true,
+                isCatastrophicMissionRoll: getContextValue("isCatastrophicMissionRoll") === true,
+                isAllyDangerRoll: getContextValue("isAllyDangerRoll") === true,
+                isTraitorRoll: getContextValue("isTraitorRoll") === true,
+                isTraitorExecuteLoyaltyRoll: getContextValue("isTraitorExecuteLoyaltyRoll") === true,
+                isTraitorExileSecurityRoll: getContextValue("isTraitorExileSecurityRoll") === true,
+                isTraitorPrisonSecrecyRoll: getContextValue("isTraitorPrisonSecrecyRoll") === true,
+                isTraitorPersuadeAttemptRoll: getContextValue("isTraitorPersuadeAttemptRoll") === true,
+                isDevilPerceptionRoll: getContextValue("isDevilPerceptionRoll") === true,
+                isTeamActionRoll: getContextValue("isTeamActionRoll") === true,
+                isSilverRavensActionRoll: getContextValue("isSilverRavensActionRoll") === true,
+                teamIdx: getContextValue("teamIdx"),
+                selectedAction: getContextValue("selectedAction"),
+                checkType: getContextValue("checkType") ?? getContextValue("skill") ?? getContextValue("action"),
+                teamType: getContextValue("teamType"),
+                eventIndex: getContextValue("eventIndex"),
+                allyIndex: getContextValue("allyIndex"),
+                allyName: getContextValue("allyName"),
+                dc: getContextValue("dc"),
+                devilWeeks: getContextValue("devilWeeks"),
+                devilRollHistory: getContextValue("devilRollHistory"),
+                sentinelName: getContextValue("sentinelName"),
+                perceptionBonus: getContextValue("perceptionBonus")
+            }
+        };
+        pendingRerolls.push(pendingEntry);
+
+        let temporaryMitigationState = false;
+        if (isMitigationContext && !game.rebellionState) {
+            game.rebellionState = {
+                isMitigation: true,
+                eventName,
+                timestamp: Date.now()
+            };
+            temporaryMitigationState = true;
+        }
+
+        const rerollStart = pendingEntry.startedAt;
+
+        try {
+            await game.pf2e.Check.rerollFromMessage(message, { keep: "new" });
+
+            // Mark reroll as used only after successful reroll
+            await DataHandler.useReroll(data, rerollType);
+
+            // Best-effort: add module flags to the new reroll message for strict detection.
+            const findRerollMessage = () => [...game.messages.contents]
+                .reverse()
+                .find(m =>
+                    m.isRoll &&
+                    m.id !== messageId &&
+                    m.flags?.pf2e?.context?.isReroll &&
+                    (m.timestamp ?? 0) >= rerollStart - 10000
+                );
+
+            let rerollMessage = findRerollMessage();
+            for (let attempt = 0; !rerollMessage && attempt < 8; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 150));
+                rerollMessage = findRerollMessage();
+            }
+
+            if (rerollMessage) {
+                if (isMitigationContext) {
+                    await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "isMitigation", true);
+                }
+                await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "isReroll", true);
+                await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "originalMessageId", messageId);
+                if (eventName) {
+                    await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "eventName", eventName);
+                }
+
+                const eventRollPassThroughKeys = [
+                    "isStukachRoll",
+                    "isFailedProtestRoll",
+                    "isCatastrophicMissionRoll",
+                    "isAllyDangerRoll",
+                    "isTraitorRoll",
+                    "isTraitorExecuteLoyaltyRoll",
+                    "isTraitorExileSecurityRoll",
+                    "isTraitorPrisonSecrecyRoll",
+                    "isTraitorPersuadeAttemptRoll",
+                    "isDevilPerceptionRoll",
+                    "isTeamActionRoll",
+                    "isSilverRavensActionRoll",
+                    "teamIdx",
+                    "selectedAction",
+                    "checkType",
+                    "teamType",
+                    "eventIndex",
+                    "allyIndex",
+                    "allyName",
+                    "dc",
+                    "devilWeeks",
+                    "devilRollHistory",
+                    "sentinelName",
+                    "perceptionBonus"
+                ];
+
+                for (const key of eventRollPassThroughKeys) {
+                    const value = getContextValue(key) ?? pendingEntry.contextData?.[key];
+                    const shouldSet = key.startsWith("is") ? value === true : value !== undefined && value !== null;
+                    if (shouldSet) {
+                        await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", key, value);
+                    }
+                }
+
+                const contextMissingKey = context.missingSearchKey ?? context?.context?.missingSearchKey ?? null;
+                if (contextMissingKey) {
+                    const contextTeamType = context.teamType ?? context?.context?.teamType ?? null;
+                    const contextTeamLabel = context.teamLabel ?? context?.context?.teamLabel ?? null;
+                    await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "isMissingTeamSearchRoll", true);
+                    await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "missingSearchKey", contextMissingKey);
+                    if (contextTeamType) await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "teamType", contextTeamType);
+                    if (contextTeamLabel) await rerollMessage.setFlag("pf2e-ts-adv-pf1ehr", "teamLabel", contextTeamLabel);
+                }
+                pendingEntry.resolved = true;
+                pendingEntry.resolvedAt = Date.now();
+                pendingEntry.rerollMessageId = rerollMessage.id;
+            } else {
+                console.warn("Rebellion: Reroll message was not found for flag sync", { messageId, rerollType, rerollStart });
+            }
+        } catch (error) {
+            pendingEntry.resolved = true;
+            pendingEntry.failed = true;
+            pendingEntry.failedAt = Date.now();
+            console.error("Rebellion: Native reroll failed:", error);
+            ui.notifications.error("Не удалось выполнить переброс.");
+            return;
+        } finally {
+            if (temporaryMitigationState) {
+                setTimeout(() => {
+                    if (game.rebellionState?.isMitigation) {
+                        game.rebellionState = null;
+                    }
+                }, 10000);
             }
         }
-        
-        // Mark reroll as used
-        await DataHandler.useReroll(data, rerollType);
-        
-        // Perform the reroll - create a proper roll message
-        const rollFormula = `1d20 + ${bonus}`;
-        const newRoll = new Roll(rollFormula);
-        await newRoll.evaluate();
-        
-        // Create and post the new roll message with proper flags for event detection
-        await newRoll.toMessage({
-            speaker: ChatMessage.getSpeaker(),
-            flavor: `<h4 class="action"><strong>Переброс ${allyName}: ${skillName}</strong></h4>`,
-            flags: {
-                pf2e: {
-                    context: {
-                        type: "skill-check",
-                        skill: rerollType,
-                        action: rerollType
-                    }
-                },
-                "pf2e-ts-adv-pf1ehr": {
-                    isMitigation: true,
-                    isReroll: true,
-                    originalMessageId: messageId
-                }
-            }
-        });
-        
+
         // Show simple notification
-        ui.notifications.info(`${allyName} предоставляет переброс! Исходный результат: ${originalTotal}`);
-        
+        ui.notifications.info(`${allyName} предоставляет переброс. Исходный результат: ${originalTotal}`);
+
         // Disable the button
         $(ev.currentTarget).prop('disabled', true).css('opacity', '0.5').text('Использован');
     });
@@ -2503,7 +2782,7 @@ Hooks.on("renderActorDirectory", (app, html, data) => {
     // Удаляем старую кнопку если есть
     header.find(".silver-raven-btn").remove();
 
-    const button = $(`<button class="silver-raven-btn" style="min-width: 32px; flex: 0 0 32px; background-color: #194680; color: #c0c0c0; border: 1px solid #c9ad6a;" title="Лист Восстания"><i class="fas fa-crow"></i></button>`);
+    const button = $(`<button class="silver-raven-btn" style="min-width: 32px; flex: 0 0 32px; background-color: #194680; color: #c0c0c0; border: 1px solid #c9ad6a;" title="\u041b\u0438\u0441\u0442 \u0412\u043e\u0441\u0441\u0442\u0430\u043d\u0438\u044f"><i class="fas fa-crow"></i></button>`);
 
     button.on("click", (ev) => {
         ev.preventDefault();
@@ -2609,33 +2888,34 @@ Hooks.on('createChatMessage', async (message) => {
 
 
 });
-    // Обработчики для события "Дьявольское проникновение"
-    $(document).on('click', '.roll-devil-weeks-btn', (ev) => {
-        console.log("=== DEVIL WEEKS BUTTON CLICKED (main.js) ===");
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onDevilWeeksRoll(ev);
-    });
+// Обработчики для события "Дьявольское проникновение"
+$(document).on('click', '.roll-devil-weeks-btn', (ev) => {
+    console.log("=== DEVIL WEEKS BUTTON CLICKED (main.js) ===");
+    ev.preventDefault();
+    const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+    sheet._onDevilWeeksRoll(ev);
+});
 
-    $(document).on('click', '.roll-devil-perception-btn', (ev) => {
-        console.log("=== DEVIL PERCEPTION BUTTON CLICKED (main.js) ===");
-        ev.preventDefault();
-        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
-        sheet._onDevilPerceptionRoll(ev);
-    });
+$(document).on('click', '.roll-devil-perception-btn', (ev) => {
+    console.log("=== DEVIL PERCEPTION BUTTON CLICKED (main.js) ===");
+    ev.preventDefault();
+    const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+    sheet._onDevilPerceptionRoll(ev);
+});
 
-    // Обработчик для кнопки информации об Инквизиции
-    $(document).on('click', '.show-inquisition-info-btn', (ev) => {
-        ev.preventDefault();
-        const message = `
-            <h3>🏛️ Как завершить постоянную Инквизицию</h3>
-            <p><strong>Требуется:</strong> Действие "Залечь на дно" с успешной проверкой Секретности КС 20.</p>
-            <p><strong>Эффект при успехе:</strong> Постоянная Инквизиция завершается.</p>
+// Обработчик для кнопки информации об Инквизиции
+$(document).on('click', '.show-inquisition-info-btn', (ev) => {
+    ev.preventDefault();
+    const message = `
+            <h3>🛡️ Как завершить постоянную Инквизицию</h3>
+            <p><strong>Требуется:</strong> действие "Залечь на дно" с успешной проверкой Секретности КС 20.</p>
+            <p><strong>Эффект при успехе:</strong> постоянная Инквизиция завершается.</p>
             <p><strong>Эффект при провале:</strong> Инквизиция продолжается.</p>
-            <p><em>Примечание: Только постоянная Инквизиция может быть завершена таким образом. Временная Инквизиция (1 неделя) завершается автоматически.</em></p>
+            <p><em>Примечание: только постоянная Инквизиция может быть завершена таким образом. Временная Инквизиция (1 неделя) завершается автоматически.</em></p>
         `;
-        ChatMessage.create({
-            content: message,
-            speaker: { alias: "Система восстания" }
-        });
+    ChatMessage.create({
+        content: message,
+        speaker: { alias: "Система восстания" }
     });
+});
+

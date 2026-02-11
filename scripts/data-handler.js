@@ -1,6 +1,6 @@
-import { REBELLION_PROGRESSION, FOCUS_TYPES, OFFICER_ROLES, EVENT_TABLE } from "./config.js";
-import { ALLY_DEFINITIONS } from "./allies.js";
-import { TEAMS, getTeamDefinition } from "./teams.js";
+import { REBELLION_PROGRESSION, FOCUS_TYPES, OFFICER_ROLES, EVENT_TABLE, ALLY_DEFINITIONS, TEAMS, MIN_TREASURY_BY_RANK } from "./config.js";
+import { getTeamDefinition } from "./utils.js";
+import { defaultRebellionData, mergeRebellionData, normalizeRebellionData } from "./data-handler-storage.js";
 
 const SETTING_KEY = "rebellionData";
 const MODULE_ID = "pf2e-ts-adv-pf1ehr";
@@ -35,71 +35,12 @@ export class DataHandler {
     }
 
     static defaultData() {
-        return {
-            week: 1,
-            rank: 1,
-            maxRank: 20,               // Campaign max rank (full table)
-            supporters: 0,
-            population: 11900,
-            treasury: 10,
-            notoriety: 0,
-            danger: 20,                // Kintargo danger rating (starts at 20%)
-            focus: "loyalty",
-            phaseReport: "",
-            weeksWithoutEvent: 0,      // For doubling event chance
-            actionsUsedThisWeek: 0,    // Track actions in Activity Phase
-            strategistUsed: false,     // Track if Strategist bonus was used this week (once per week limit)
-            recruitedThisPhase: false, // Track if Recruit Supporters was used this phase (once per phase limit)
-            silverRavensAction: "",    // Current action selected for Silver Ravens (PC actions)
-            tempBonuses: { loyalty: 0, security: 0, secrecy: 0 },
-            activeEvents: [],          // Persistent events [{name, effect, weekStarted, isPersistent}]
-            officers: [],
-            teams: [],
-            allies: [],
-            events: [],                // Custom effects/notes
-            caches: [],                // [{location, size, contents, value}]
-            customGifts: {},           // Custom PC gifts by rank {rank: "gift text"}
-            monthlyActions: {},        // Track monthly actions by ally slug {allySlug: {lastUsedWeek: number, lastUsedMonth: number}}
-            eventsThisPhase: []        // Track events that occurred in current event phase
-        };
+        return defaultRebellionData();
     }
 
     static get() {
-        const d = game.settings.get(MODULE_ID, SETTING_KEY);
-        // Force Arrays - but preserve team structure
-        if (d.teams && !Array.isArray(d.teams)) {
-            // For teams, we need to preserve the object structure with indices
-            const teamsObject = d.teams;
-            d.teams = [];
-            Object.keys(teamsObject).forEach(key => {
-                const index = parseInt(key);
-                d.teams[index] = teamsObject[key];
-            });
-        }
-        ["officers", "allies", "events", "activeEvents", "caches"].forEach(key => {
-            if (d[key] && !Array.isArray(d[key])) d[key] = Object.values(d[key]);
-        });
-        
-        // Ensure monthlyActions exists
-        if (!d.monthlyActions) d.monthlyActions = {};
-        const data = foundry.utils.mergeObject(this.defaultData(), d);
-
-        // Auto-repair officers
-        if (!data.officers) data.officers = [];
-
-        // 1. Remove invalid officers (no role)
-        const validOfficers = data.officers.filter(o => o.role && OFFICER_ROLES[o.role]);
-        data.officers = validOfficers;
-
-        // Ensure teams array is properly structured
-        if (!data.teams) data.teams = [];
-        if (Array.isArray(data.teams)) {
-            // Remove any undefined/null entries from the teams array
-            // This handles cases where teams have been properly deleted
-            data.teams = data.teams.filter(team => team !== null && team !== undefined);
-        }
-
-        return data;
+        const stored = game.settings.get(MODULE_ID, SETTING_KEY);
+        return normalizeRebellionData(stored);
     }
 
     static async update(newData) {
@@ -152,125 +93,7 @@ export class DataHandler {
         const current = DataHandler.get();
         console.log("Rebellion save(): текущие данные treasury:", current.treasury);
 
-        // Special handling for teams to preserve types and managers
-        if (data.teams) {
-            // If the new teams array is shorter than current, it means teams were deleted
-            // In this case, use the new array directly
-            if (Array.isArray(data.teams) && data.teams.length < (current.teams?.length || 0)) {
-                current.teams = data.teams;
-                delete data.teams;
-            }
-            // Fix: Skip processing if teams array contains only undefined values
-            else if (Array.isArray(data.teams) && data.teams.every(t => t === undefined)) {
-                delete data.teams;
-            } else if (Array.isArray(data.teams)) {
-                const preservedTeams = data.teams.map((team, i) => {
-                    // Fix: If team is undefined, return current team to preserve existing data
-                    if (team === undefined) {
-                        return current.teams[i] ?? null;
-                    }
-
-                    const currentTeam = current.teams[i];
-
-                    // If current team exists, preserve its properties
-                    if (currentTeam) {
-                        // Always preserve existing team type if available
-                        if (currentTeam.type) {
-                            // Only override if incoming team type is missing or invalid
-                            if (!team.type || !TEAMS[team.type]) {
-                                team.type = currentTeam.type;
-                            }
-                        }
-
-                        // Use manager from update if provided, otherwise preserve existing
-                        if (team.manager !== undefined) {
-                            // Use new manager (including empty string for "Нет")
-                        } else if (currentTeam.manager) {
-                            team.manager = currentTeam.manager;
-                        }
-                    }
-
-                    // Ensure team has required properties
-                    if (!team.type) team.type = 'streetPerformers';
-                    if (!team.manager && team.manager !== "") team.manager = "";
-                    if (!team.bonus) team.bonus = 0;
-                    if (team.disabled === undefined || team.disabled === null) team.disabled = false;
-                    if (team.missing === undefined || team.missing === null) team.missing = false;
-                    if (team.canAutoRecover === undefined || team.canAutoRecover === null) team.canAutoRecover = false;
-                    if (!team.currentAction) team.currentAction = "";
-
-                    return team;
-                });
-                current.teams = preservedTeams;
-                delete data.teams;
-            } else {
-                Object.entries(data.teams).forEach(([idx, updateData]) => {
-                    const i = Number(idx);
-                    if (current.teams[i]) {
-                        if (updateData.type === undefined || !TEAMS[updateData.type]) {
-                            const preservedType = current.teams[i].type;
-                            updateData.type = preservedType;
-                        }
-                        // Preserve manager from update data
-                        if (updateData.manager !== undefined) {
-                            current.teams[i].manager = updateData.manager;
-                        } else if (current.teams[i].manager) {
-                            // Preserve existing manager
-                        }
-                        foundry.utils.mergeObject(current.teams[i], updateData);
-                        
-                        // Ensure team has required properties after merge
-                        const team = current.teams[i];
-                        if (team.disabled === undefined || team.disabled === null) team.disabled = false;
-                        if (team.missing === undefined || team.missing === null) team.missing = false;
-                        if (team.canAutoRecover === undefined || team.canAutoRecover === null) team.canAutoRecover = false;
-                    } else {
-                        if (!updateData.type || !TEAMS[updateData.type]) {
-                            updateData.type = 'unknown';
-                        }
-                        current.teams[i] = updateData;
-                    }
-                });
-                delete data.teams;
-            }
-        }
-
-        // Smart merge for arrays with numeric indices (officers, etc)
-        ["officers", "allies", "events", "activeEvents", "caches"].forEach(key => {
-            if (data[key] && typeof data[key] === 'object') {
-                const updates = data[key];
-
-                if (!Array.isArray(updates)) {
-                    // It's an object map.
-                    Object.entries(updates).forEach(([idx, updateData]) => {
-                        const i = Number(idx);
-                        if (current[key][i]) {
-                            // For teams, preserve the manager field if it exists in the update
-                            if (key === 'teams' && updateData.manager !== undefined) {
-                                current[key][i].manager = updateData.manager;
-                            }
-                            foundry.utils.mergeObject(current[key][i], updateData);
-                        } else {
-                            current[key][i] = updateData;
-                        }
-                    });
-                    delete data[key];
-                } else {
-                    // It IS an array (direct save call?). Replace it.
-                    current[key] = updates;
-                    delete data[key];
-                }
-            }
-        });
-
-        // Special handling for monthlyActions (object with string keys, not array)
-        if (data.monthlyActions && typeof data.monthlyActions === 'object') {
-            if (!current.monthlyActions) current.monthlyActions = {};
-            foundry.utils.mergeObject(current.monthlyActions, data.monthlyActions);
-            delete data.monthlyActions;
-        }
-
-        const merged = foundry.utils.mergeObject(current, data);
+        const merged = mergeRebellionData(current, data);
         console.log("Rebellion save(): merged данные:", JSON.stringify(merged));
         await game.settings.set(MODULE_ID, SETTING_KEY, merged);
         console.log("Rebellion save(): сохранено в settings");
@@ -516,9 +339,15 @@ export class DataHandler {
                 if (a.slug === 'octavio' && actionContext === 'rescueCharacter') {
                     add('security', 'Октавио', 4);
                 }
-                // Vendalfek: +4 Secrecy for Spread Disinformation action
+                // Vendalfek: +4 Secrecy for Spread Disinformation action (only if a team with disinformation exists)
                 if (a.slug === 'vendalfek' && actionContext === 'disinformation') {
-                    add('secrecy', 'Вендалфек', 4);
+                    const hasDisinfoTeam = data.teams.some(t =>
+                        !t.disabled && !t.missing &&
+                        ['rumormongers', 'agitators', 'cognoscenti'].includes(t.type)
+                    );
+                    if (hasDisinfoTeam) {
+                        add('secrecy', 'Вендалфек', 4);
+                    }
                 }
             }
         });
@@ -690,7 +519,22 @@ export class DataHandler {
 
     // Get effective danger with event modifiers
     static getEffectiveDanger(data) {
-        let danger = data.danger || 0;
+        const toFiniteNumber = (value, fallback = 0) => {
+            if (typeof value === "number") {
+                return Number.isFinite(value) ? value : fallback;
+            }
+            if (typeof value === "string") {
+                const trimmed = value.trim();
+                if (!trimmed) return fallback;
+                const match = trimmed.match(/[+-]?\d+(?:[.,]\d+)?/);
+                if (!match) return fallback;
+                const parsed = Number.parseFloat(match[0].replace(",", "."));
+                return Number.isFinite(parsed) ? parsed : fallback;
+            }
+            return fallback;
+        };
+
+        let danger = toFiniteNumber(data?.danger, 0);
         console.log(`🎯 getEffectiveDanger НАЧАЛО: базовая опасность=${danger}, неделя=${data.week}`);
         
         // Apply danger modifiers from active events
@@ -703,6 +547,9 @@ export class DataHandler {
                 console.log(`   - duration: ${ev.duration}`);
                 console.log(`   - dangerReduction: ${ev.dangerReduction}`);
                 console.log(`   - dangerIncrease: ${ev.dangerIncrease}`);
+                const dangerReduction = toFiniteNumber(ev.dangerReduction, 0);
+                const dangerIncrease = toFiniteNumber(ev.dangerIncrease, 0);
+                const dangerModifier = toFiniteNumber(ev.modifierValue, 0);
                 
                 const isActive = (ev.weekStarted || 0) <= (data.week || 0);
                 console.log(`   - Активно: ${isActive} (${ev.weekStarted || 0} <= ${data.week || 0})`);
@@ -713,34 +560,34 @@ export class DataHandler {
                 }
                 
                 // Событие "Уменьшенная угроза" (от таблицы событий)
-                if (ev.name === "Уменьшенная угроза" && ev.dangerReduction) {
-                    console.log(`   ✅ ПРИМЕНЯЕМ снижение опасности: -${ev.dangerReduction}`);
+                if (ev.name === "Уменьшенная угроза" && dangerReduction !== 0) {
+                    console.log(`   ✅ ПРИМЕНЯЕМ снижение опасности: -${dangerReduction}`);
                     const oldDanger = danger;
-                    danger = Math.max(0, danger - ev.dangerReduction);
+                    danger = Math.max(0, danger - dangerReduction);
                     console.log(`   📊 Опасность: ${oldDanger} -> ${danger}`);
                 }
                 
                 // Эффект от действия "Снижение опасности"
-                if (ev.name === "Сниженная опасность (действие)" && ev.dangerReduction) {
-                    console.log(`   ✅ ПРИМЕНЯЕМ снижение опасности от действия: -${ev.dangerReduction}`);
+                if (ev.name === "Сниженная опасность (действие)" && dangerReduction !== 0) {
+                    console.log(`   ✅ ПРИМЕНЯЕМ снижение опасности от действия: -${dangerReduction}`);
                     const oldDanger = danger;
-                    danger = Math.max(0, danger - ev.dangerReduction);
+                    danger = Math.max(0, danger - dangerReduction);
                     console.log(`   📊 Опасность: ${oldDanger} -> ${danger}`);
                 }
                 
-                if (ev.name === "Опасные времена" && ev.dangerIncrease) {
-                    console.log(`   ✅ ПРИМЕНЯЕМ увеличение опасности: +${ev.dangerIncrease}`);
+                if (ev.name === "Опасные времена" && dangerIncrease !== 0) {
+                    console.log(`   ✅ ПРИМЕНЯЕМ увеличение опасности: +${dangerIncrease}`);
                     const oldDanger = danger;
-                    danger += ev.dangerIncrease;
+                    danger += dangerIncrease;
                     console.log(`   📊 Опасность: ${oldDanger} -> ${danger}`);
                 }
                 
-                if (ev.name === "Опасные времена" && !ev.dangerIncrease) {
+                if (ev.name === "Опасные времена" && dangerIncrease === 0) {
                     console.log(`   ⚠️ ПРОБЛЕМА: Событие "Опасные времена" без dangerIncrease!`);
                 }
                 
                 // Кастомные модификаторы опасности
-                if (ev.isCustomModifier && ev.modifierValue && ev.affectedChecks?.includes('danger')) {
+                if (ev.isCustomModifier && ev.affectedChecks?.includes('danger') && dangerModifier !== 0) {
                     // Проверяем длительность для временных эффектов
                     let isStillActive = true;
                     if (!ev.isPersistent && ev.duration) {
@@ -749,9 +596,9 @@ export class DataHandler {
                     }
                     
                     if (isStillActive) {
-                        console.log(`   ✅ ПРИМЕНЯЕМ кастомный модификатор опасности "${ev.name}": ${ev.modifierValue >= 0 ? '+' : ''}${ev.modifierValue}`);
+                        console.log(`   ✅ ПРИМЕНЯЕМ кастомный модификатор опасности "${ev.name}": ${dangerModifier >= 0 ? '+' : ''}${dangerModifier}`);
                         const oldDanger = danger;
-                        danger += ev.modifierValue;
+                        danger += dangerModifier;
                         console.log(`   📊 Опасность: ${oldDanger} -> ${danger}`);
                     }
                 }
@@ -794,30 +641,7 @@ export class DataHandler {
             }
         }
         
-        // Lookup table for min treasury by rank
-        const minTreasuryByRank = {
-                                    1: 2,
-                                    2: 3,
-                                    3: 4,
-                                    4: 5,
-                                    5: 7,
-                                    6: 9,
-                                    7: 12,
-                                    8: 15,
-                                    9: 18,
-                                    10: 22,
-                                    11: 26,
-                                    12: 29,
-                                    13: 32,
-                                    14: 35,
-                                    15: 38,
-                                    16: 40,
-                                    17: 42,
-                                    18: 43,
-                                    19: 44,
-                                    20: 45
-                                    };
-        return minTreasuryByRank[data.rank] ?? 19;
+        return MIN_TREASURY_BY_RANK[data.rank] ?? 19;
     }
 
     // Check if treasury is below minimum
