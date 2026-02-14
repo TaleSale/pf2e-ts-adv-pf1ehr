@@ -154,7 +154,7 @@ export function defaultRebellionData() {
         maxRank: 20,
         supporters: 0,
         population: 11900,
-        treasury: 10,
+        treasury: 2,
         notoriety: 0,
         danger: 20,
         focus: "loyalty",

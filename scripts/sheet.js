@@ -908,6 +908,7 @@ export class RebellionSheet extends FormApplication {
         html.find('.execute-manticce-bonus-btn').click((ev) => this._onExecuteManticceBonusAction(ev));
         html.find('.add-custom-effect-btn').click((ev) => this._onAddCustomEffect(ev));
         html.find('.delete-effect').click(async (ev) => {
+            if (!game.user.isGM) return;
             const i = ev.currentTarget.dataset.index;
             const d = DataHandler.get();
             const event = d.events[i];
@@ -6776,6 +6777,7 @@ export class RebellionSheet extends FormApplication {
      */
     async _onAddCustomEffect(ev) {
         ev.preventDefault();
+        if (!game.user.isGM) return;
         const data = DataHandler.get();
         const currentWeek = data.week || 1;
 

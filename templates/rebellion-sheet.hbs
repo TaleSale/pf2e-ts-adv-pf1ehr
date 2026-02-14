@@ -736,7 +736,9 @@
 
         <div class="tab" data-tab="effects" data-group="primary">
             <div class="effects-header" style="margin-bottom: 10px;">
+                {{#if isGM}}
                 <button type="button" class="add-custom-effect-btn"><i class="fas fa-plus"></i> Добавить модификатор</button>
+                {{/if}}
             </div>
             <div class="teams-list">
                 {{#each data.events as |eff idx|}}
@@ -746,7 +748,9 @@
                             style="font-weight:bold; width:30%; border:none; border-bottom:1px solid #ccc;">
                         <input type="text" name="events.{{idx}}.desc" value="{{eff.desc}}" placeholder="Описание"
                             style="flex:1; margin:0 5px; border:none; border-bottom:1px solid #ccc;">
+                        {{#if ../isGM}}
                         <a class="delete-effect control-btn" data-index="{{idx}}"><i class="fas fa-trash"></i></a>
+                        {{/if}}
                     </div>
                     <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
                         <div style="font-size:11px; color:#666;">

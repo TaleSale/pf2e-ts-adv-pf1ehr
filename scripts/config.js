@@ -90,7 +90,7 @@ export const OFFICER_ROLES = {
 export const FOCUS_TYPES = {
     loyalty: { label: "Верность", primary: "loyalty", bonuses: { loyalty: "focus", security: "secondary", secrecy: "secondary" } },
     security: { label: "Безопасность", primary: "security", bonuses: { loyalty: "secondary", security: "focus", secrecy: "secondary" } },
-    secrecy: { label: "Скрытность", primary: "secrecy", bonuses: { loyalty: "secondary", security: "secondary", secrecy: "focus" } }
+    secrecy: { label: "Секретность", primary: "secrecy", bonuses: { loyalty: "secondary", security: "secondary", secrecy: "focus" } }
 };
 
 // === LABELS ===

@@ -542,15 +542,11 @@ export class JournalLogger {
                     Смена приоритета восстания
                 </h5>
                 
-                <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin: 15px 0;">
-                    <div style="text-align: center;">
-                        <div style="color: #666; font-size: 0.9em;">Было:</div>
-                        <strong style="color: #757575; font-size: 1.1em;">${oldFocusName}</strong>
-                    </div>
-                    <div style="font-size: 2em; color: #ff9800;">➡️</div>
-                    <div style="text-align: center;">
-                        <div style="color: #f57c00; font-size: 0.9em;">Стало:</div>
-                        <strong style="color: #f57c00; font-size: 1.2em;">${newFocusName}</strong>
+                <div style="display: flex; align-items: center; justify-content: center; margin: 15px 0; white-space: nowrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; white-space: nowrap;">
+                        <strong style="color: #757575; font-size: 1em; white-space: nowrap;">${oldFocusName}</strong>
+                        <span style="font-size: 1.15em; color: #ff9800; line-height: 1;">→</span>
+                        <strong style="color: #f57c00; font-size: 1.05em; white-space: nowrap;">${newFocusName}</strong>
                     </div>
                 </div>
                 

@@ -308,7 +308,7 @@ export class DataHandler {
             // Apply bonuses based on ally slug
             if (a.slug === 'blosodriette') {
                 add('secrecy', 'Блосодриетта', 1);
-                add('loyalty', 'Бес', -1);
+                add('loyalty', 'Блосодриетта', -1);
             }
             if (a.slug === 'jilia') {
                 add('security', 'Джилия', 2);
