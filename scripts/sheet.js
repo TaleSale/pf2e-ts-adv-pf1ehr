@@ -3682,6 +3682,9 @@ export class RebellionSheet extends FormApplication {
 
     async _onMaintenanceAttrition() {
         const data = DataHandler.get();
+        const maintenanceSettings = data.maintenanceSettings || {};
+        const treasuryAttritionMode = maintenanceSettings.treasuryAttritionMode || "half-min-treasury";
+        const minTreasury = DataHandler.getMinTreasury(data);
         const bonuses = DataHandler.getRollBonuses(data);
         const roll = new Roll("1d20");
         await roll.evaluate();
@@ -3749,7 +3752,24 @@ export class RebellionSheet extends FormApplication {
 
         const currentSupp = data.supporters || 0;
         const newSupp = Math.max(0, currentSupp - lost);
-        await DataHandler.update({ supporters: newSupp });
+
+        const treasuryByMode = {
+            "min-treasury": minTreasury,
+            "half-min-treasury": Math.floor(minTreasury / 2),
+            "no-attrition": 0
+        };
+        const treasuryModeLabels = {
+            "min-treasury": "Мин. казна",
+            "half-min-treasury": "Половина мин. казны",
+            "no-attrition": "Без убыли"
+        };
+        const plannedTreasuryLoss = treasuryByMode[treasuryAttritionMode] ?? Math.floor(minTreasury / 2);
+        const treasuryModeLabel = treasuryModeLabels[treasuryAttritionMode] || "Половина мин. казны";
+        const currentTreasury = data.treasury || 0;
+        const treasuryLoss = Math.min(currentTreasury, plannedTreasuryLoss);
+        const newTreasury = Math.max(0, currentTreasury - treasuryLoss);
+
+        await DataHandler.update({ supporters: newSupp, treasury: newTreasury });
 
         // Ally effects
         let allyEffects = [];
@@ -3766,6 +3786,8 @@ export class RebellionSheet extends FormApplication {
             await DataHandler.update({ notoriety: newNotoriety });
             allyEffects.push(`Хетамон: -${hVal} Известность (${currentNotoriety} → ${newNotoriety})`);
         }
+
+        const showTreasuryAttritionBlock = treasuryAttritionMode !== "no-attrition";
 
         let message = `
             <div style="
@@ -3787,14 +3809,24 @@ export class RebellionSheet extends FormApplication {
                     </span>
                 </div>
                 
-                <div style="background: rgba(255,255,255,0.8); padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid ${color};">
-                    <strong style="color: ${color};">${resultText}</strong>
+                 <div style="background: rgba(255,255,255,0.8); padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid ${color};">
+                     <strong style="color: ${color};">${resultText}</strong>
+                     <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                         <span style="color: #333;">Изменение: ${lost > 0 ? `-${lost}` : `+${Math.abs(lost)}`} сторонников</span>
+                         <span style="font-weight: bold; color: ${color};">Всего: ${newSupp}</span>
+                     </div>
+                 </div>
+
+                ${showTreasuryAttritionBlock ? `
+                <div style="background: rgba(255,255,255,0.8); padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #ff9800;">
+                    <strong style="color: #ef6c00;">Убыль казны:</strong>
                     <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #333;">Изменение: ${lost > 0 ? `-${lost}` : `+${Math.abs(lost)}`} сторонников</span>
-                        <span style="font-weight: bold; color: ${color};">Всего: ${newSupp}</span>
+                        <span style="color: #333;">${treasuryModeLabel}: -${treasuryLoss} зм${plannedTreasuryLoss > treasuryLoss ? " (списано до нуля)" : ""}</span>
+                        <span style="font-weight: bold; color: #ef6c00;">Остаток: ${newTreasury} зм</span>
                     </div>
                 </div>
-                
+                ` : ''}
+
                 ${allyEffects.length > 0 ? `
                 <div style="background: rgba(76, 175, 80, 0.1); padding: 12px; border-radius: 8px; border: 2px solid #4caf50;">
                     <strong style="color: #2e7d32;">Эффекты союзников:</strong>
@@ -9705,28 +9737,32 @@ export class RebellionSheet extends FormApplication {
      */
     async _onMaintenanceSettingsDialog() {
         const data = DataHandler.get();
-        const maintenanceSettings = data.maintenanceSettings || {
+        const defaultValues = [2, 3, 4, 5, 7, 9, 12, 15, 18, 22, 26, 29, 32, 35, 38, 40, 42, 43, 44, 45];
+        const defaultMinTreasury = {};
+        for (let rank = 1; rank <= 20; rank++) {
+            defaultMinTreasury[`rank${rank}`] = defaultValues[rank - 1];
+        }
+        const maintenanceSettings = {
             minTreasury: {
-                rank1: 2, rank2: 3, rank3: 4, rank4: 5, rank5: 7,
-                rank6: 9, rank7: 12, rank8: 15, rank9: 18, rank10: 22,
-                rank11: 26, rank12: 29, rank13: 32, rank14: 35, rank15: 38,
-                rank16: 40, rank17: 42, rank18: 43, rank19: 44, rank20: 45
+                ...defaultMinTreasury,
+                ...(data.maintenanceSettings?.minTreasury || {})
             },
-            teamRestoreCost: 10
+            teamRestoreCost: Number.isFinite(Number(data.maintenanceSettings?.teamRestoreCost))
+                ? Number(data.maintenanceSettings.teamRestoreCost)
+                : 10,
+            treasuryAttritionMode: data.maintenanceSettings?.treasuryAttritionMode || "half-min-treasury"
         };
 
         const content = `
-            <form style="max-width: 500px;">
+            <form style="max-width: 700px;">
                 <p style="margin-bottom: 20px; color: #666;">Настройте параметры фазы содержания.</p>
                 
                 <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px; background: #f0f8ff;">
                     <h4 style="margin: 0 0 15px 0; color: #1976d2;">💰 Минимальная казна по рангам</h4>
-                    
+                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; max-height: 300px; overflow-y: auto;">
                         ${Array.from({ length: 20 }, (_, i) => {
             const rank = i + 1;
-            // Default values from minTreasuryByRank table
-            const defaultValues = [2, 3, 4, 5, 7, 9, 12, 15, 18, 22, 26, 29, 32, 35, 38, 40, 42, 43, 44, 45];
             const value = maintenanceSettings.minTreasury[`rank${rank}`] || defaultValues[rank - 1];
             return `
                                 <div>
@@ -9747,6 +9783,22 @@ export class RebellionSheet extends FormApplication {
                         <small style="display: block; margin-top: 5px; color: #666; font-style: italic;">Сколько золота нужно потратить, чтобы восстановить недееспособную команду</small>
                     </div>
                 </div>
+
+                <div style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px; background: #f7f2ff;">
+                    <h4 style="margin: 0 0 15px 0; color: #7b1fa2;">💸 Убыль казны</h4>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Режим списания в шаге убыли сторонников:</label>
+                        <select id="treasury-attrition-mode" style="width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em;">
+                            <option value="min-treasury" ${maintenanceSettings.treasuryAttritionMode === "min-treasury" ? "selected" : ""}>Мин. казна</option>
+                            <option value="half-min-treasury" ${maintenanceSettings.treasuryAttritionMode === "half-min-treasury" ? "selected" : ""}>Половина мин. казны</option>
+                            <option value="no-attrition" ${maintenanceSettings.treasuryAttritionMode === "no-attrition" ? "selected" : ""}>Без убыли</option>
+                        </select>
+                        <small style="display: block; margin-top: 5px; color: #666; font-style: italic;">
+                            Если казны меньше нужного, списание выполняется до нуля.
+                        </small>
+                    </div>
+                </div>
             </form>
         `;
 
@@ -9759,16 +9811,19 @@ export class RebellionSheet extends FormApplication {
                     label: "Сохранить",
                     callback: async (html) => {
                         const minTreasury = {};
-                        // Default values from minTreasuryByRank table
-                        const defaultValues = [2, 3, 4, 5, 7, 9, 12, 15, 18, 22, 26, 29, 32, 35, 38, 40, 42, 43, 44, 45];
                         for (let rank = 1; rank <= 20; rank++) {
                             const value = parseInt(html.find(`#min-treasury-${rank}`).val()) || defaultValues[rank - 1];
                             minTreasury[`rank${rank}`] = value;
                         }
 
+                        const allowedModes = ["min-treasury", "half-min-treasury", "no-attrition"];
+                        const selectedModeRaw = String(html.find('#treasury-attrition-mode').val() || "");
+                        const treasuryAttritionMode = allowedModes.includes(selectedModeRaw) ? selectedModeRaw : "half-min-treasury";
+
                         const newSettings = {
                             minTreasury,
-                            teamRestoreCost: parseInt(html.find('#team-restore-cost').val()) || 10
+                            teamRestoreCost: parseInt(html.find('#team-restore-cost').val()) || 10,
+                            treasuryAttritionMode
                         };
 
                         await DataHandler.update({ maintenanceSettings: newSettings });
@@ -9779,8 +9834,8 @@ export class RebellionSheet extends FormApplication {
             },
             default: "save"
         }, {
-            width: 550,
-            height: 500
+            width: 700,
+            height: 620
         }).render(true);
     }
 

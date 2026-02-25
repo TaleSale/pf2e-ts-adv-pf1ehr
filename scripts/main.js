@@ -2,6 +2,7 @@
 import { RebellionSheet } from "./sheet.js";
 import { PF2E_SKILL_LABELS, CHECK_LABELS, CATEGORY_LABELS } from "./config.js";
 import { getTeamDefinition, getEarnIncomeDC, calculateEarnIncome, formatIncome, getHalfRankBonus, getTeamProficiencyBonus, getAllyData } from "./utils.js";
+import { openRebellionEnricherBuilder } from "./rebellion-enricher-builder.js";
 
 // === Centralized type/stat config dictionaries ===
 const TYPE_CONFIG = {
@@ -85,6 +86,22 @@ function getTypeIcon(typeExpr) {
 
 function getStatConfig(statType) {
     return STAT_CONFIG[statType] || { label: statType, icon: "fa-dice", emoji: "🎲", addVerb: statType, subVerb: statType, unit: "" };
+}
+
+function registerRebellionEnricherApi() {
+    const currentModule = game.modules.get("pf2e-ts-adv-pf1ehr");
+    if (currentModule) {
+        currentModule.api = {
+            ...(currentModule.api ?? {}),
+            openRebellionEnricherBuilder
+        };
+    }
+
+    globalThis.Rebellion ??= {};
+    globalThis.Rebellion.api = {
+        ...(globalThis.Rebellion.api ?? {}),
+        openRebellionEnricherBuilder
+    };
 }
 
 /**
@@ -210,6 +227,21 @@ Hooks.once("init", () => {
         }
     });
 
+    // Register @Rebellion[%|DC:75|R] enricher for reverse d100 rolls (success on <= DC)
+    CONFIG.TextEditor.enrichers.push({
+        pattern: /@Rebellion\[%(\+danger)?\|dc:(\d+)\|r\]/gi,
+        enricher: (match, options) => {
+            const hasDanger = !!match[1];
+            const dcParam = match[2];
+            const label = hasDanger ? `d100 + Опасность ≤ КС ${dcParam}` : `d100 ≤ КС ${dcParam}`;
+            return createEnricherButton(
+                "rebellion-percent-check", "rebellion-percent-chat-btn",
+                "fa-percent", label,
+                { hasDanger: hasDanger ? "true" : "false", dc: dcParam, reverse: "true" }
+            );
+        }
+    });
+
     // Register @Rebellion[%] enricher for d100 rolls
     CONFIG.TextEditor.enrichers.push({
         pattern: /@Rebellion\[%(\+danger)?(?:\|dc:(\d+))?\]/gi,
@@ -259,11 +291,13 @@ Hooks.once("init", () => {
     });
 
     DataHandler.init();
+    registerRebellionEnricherApi();
 });
 
 Hooks.once("ready", () => {
     console.log("Rebellion: Module ready, setting up reroll integration");
     const EVENT_REROLL_WINDOW_MS = 15000;
+    registerRebellionEnricherApi();
 
     /**
      * Shared d100 roll with dialog for manual modifier input.
@@ -277,7 +311,7 @@ Hooks.once("ready", () => {
      * @param {Object|null} [opts.chatFlags] - Extra flags for the roll ChatMessage
      * @param {string|null} [opts.borderColor] - Override card border when no DC
      */
-    async function rollD100WithDialog({ title, baseMod = 0, dc = null, icon = "fa-dice", dialogInfoLines = [], modLabels = ["Бонус", "Ручной"], chatFlags = null, borderColor = null }) {
+    async function rollD100WithDialog({ title, baseMod = 0, dc = null, icon = "fa-dice", dialogInfoLines = [], modLabels = ["Бонус", "Ручной"], chatFlags = null, borderColor = null, lowIsSuccess = false }) {
         const dialogInfoHtml = dialogInfoLines
             .map(line => `<div class="form-group"><label>${line.label}: ${line.value}</label></div>`)
             .join("");
@@ -322,12 +356,13 @@ Hooks.once("ready", () => {
             { label: modLabels[0], value: baseMod },
             { label: modLabels[1], value: manualModifier }
         ]);
+        const success = dc != null ? (lowIsSuccess ? total <= dc : total >= dc) : null;
         const resultMessage = buildResultCard({
             icon,
             title,
             result: total,
             dc,
-            success: dc ? total >= dc : null,
+            success,
             extra: modBreakdown,
             borderColor: !dc ? (borderColor || null) : null
         });
@@ -509,19 +544,24 @@ Hooks.once("ready", () => {
     });
 
     // Function to perform d100 percent roll
-    async function performPercentRoll(hasDanger, dcParam) {
+    async function performPercentRoll(hasDanger, dcParam, isReverse = false) {
         const data = DataHandler.get();
         const effectiveDanger = hasDanger ? DataHandler.getEffectiveDanger(data) : 0;
         const labelText = hasDanger ? "d100 + Опасность" : "d100";
+        const titleText = isReverse ? `${labelText} (успех при ≤ КС)` : labelText;
+        const dialogInfoLines = [];
+        if (hasDanger) dialogInfoLines.push({ label: "Опасность", value: effectiveDanger });
+        if (isReverse && dcParam != null) dialogInfoLines.push({ label: "Условие успеха", value: `<= ${dcParam}` });
 
         await rollD100WithDialog({
-            title: labelText,
+            title: titleText,
             baseMod: effectiveDanger,
             dc: dcParam,
             icon: "fa-percent",
-            dialogInfoLines: hasDanger ? [{ label: "Опасность", value: effectiveDanger }] : [],
+            dialogInfoLines,
             modLabels: ["Опасность", "Ручной"],
-            borderColor: '#6b46c1'
+            borderColor: '#6b46c1',
+            lowIsSuccess: isReverse
         });
     }
 
@@ -533,8 +573,9 @@ Hooks.once("ready", () => {
         const target = ev.currentTarget;
         const hasDanger = target.dataset.hasDanger === "true";
         const dcParam = target.dataset.dc ? parseInt(target.dataset.dc) : null;
+        const isReverse = target.dataset.reverse === "true";
 
-        await performPercentRoll(hasDanger, dcParam);
+        await performPercentRoll(hasDanger, dcParam, isReverse);
     });
 
     // Global listener for @Rebellion[%] chat buttons
@@ -545,16 +586,18 @@ Hooks.once("ready", () => {
         const target = ev.currentTarget;
         const hasDanger = target.dataset.hasDanger === "true";
         const dcParam = target.dataset.dc ? parseInt(target.dataset.dc) : null;
+        const isReverse = target.dataset.reverse === "true";
 
         // Get button text for chat
         let buttonText = hasDanger ? "d100 + Опасность" : "d100";
-        if (dcParam) buttonText += ` КС ${dcParam}`;
+        if (dcParam) buttonText += isReverse ? ` ≤ КС ${dcParam}` : ` КС ${dcParam}`;
 
         // Create button in chat
         const chatContent = `
             <button class="rebellion-percent-roll-from-chat" 
                     data-has-danger="${hasDanger}" 
                     data-dc="${dcParam || ''}"
+                    data-reverse="${isReverse}"
                     style="background: linear-gradient(135deg, #6b46c1 0%, #553c9a 100%); color: white; border: 1px solid #805ad5; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
                 <i class="fas fa-percent"></i> ${buttonText}
             </button>
@@ -573,8 +616,9 @@ Hooks.once("ready", () => {
         const button = ev.currentTarget;
         const hasDanger = button.dataset.hasDanger === "true";
         const dcParam = button.dataset.dc ? parseInt(button.dataset.dc) : null;
+        const isReverse = button.dataset.reverse === "true";
 
-        await performPercentRoll(hasDanger, dcParam);
+        await performPercentRoll(hasDanger, dcParam, isReverse);
 
         // Disable button after use
         button.disabled = true;
