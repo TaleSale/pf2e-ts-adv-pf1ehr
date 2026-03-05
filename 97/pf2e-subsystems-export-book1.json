@@ -1,0 +1,1171 @@
+{
+  "influence": {
+    "aaIZ9oHdLY01zr7m": {
+      "id": "aaIZ9oHdLY01zr7m",
+      "position": 1,
+      "name": "Каэлин Вэнс",
+      "version": "0.8.8",
+      "background": "modules/pf2e-token-pack/subjects/bestiary/npc-core/maverick/Arms-Dealer.webp",
+      "pins": {
+        "sidebar": "premise"
+      },
+      "premise": "<p><strong>Правило хорошего тона:</strong> Вы не повторяете туже проверку навыка, что вы сами использовали в прошлый раз.</p><p><strong>Успешное Влияние:</strong> После вашей ставки. Вы в итоге платите на количество ЗМ меньше равное удвоенным Очкам Влияния</p>",
+      "gmNotes": "",
+      "hidden": false,
+      "perception": 9,
+      "will": 9,
+      "influencePoints": 5,
+      "timeLimit": {
+        "current": 1,
+        "max": 2
+      },
+      "discoveries": {
+        "UhPB6ONZeF16XGMW": {
+          "id": "UhPB6ONZeF16XGMW",
+          "position": 1,
+          "hidden": false,
+          "skill": "perception",
+          "dc": 16,
+          "lore": false
+        },
+        "YdEVO7FJYHxNLc90": {
+          "id": "YdEVO7FJYHxNLc90",
+          "position": 2,
+          "hidden": false,
+          "skill": "Mercantile-lore",
+          "dc": 14,
+          "lore": true
+        },
+        "kkF2n5SopQVJv6kl": {
+          "id": "kkF2n5SopQVJv6kl",
+          "position": 3,
+          "hidden": false,
+          "skill": "society",
+          "dc": 16,
+          "lore": false
+        },
+        "GDSzChkxOSMBRHau": {
+          "id": "GDSzChkxOSMBRHau",
+          "position": 4,
+          "hidden": false,
+          "skill": "gossip-lore",
+          "dc": 14,
+          "lore": true
+        }
+      },
+      "influenceSkills": {
+        "kMlY13QHAiOipcdE": {
+          "id": "kMlY13QHAiOipcdE",
+          "position": 1,
+          "name": "",
+          "hidden": false,
+          "skill": "diplomacy",
+          "dc": 16,
+          "lore": false
+        },
+        "yLb6Cq8HNArGYtdF": {
+          "id": "yLb6Cq8HNArGYtdF",
+          "position": 2,
+          "name": "",
+          "hidden": true,
+          "skill": "deception",
+          "dc": 18,
+          "lore": false
+        },
+        "He668QLRHoCIwLPf": {
+          "id": "He668QLRHoCIwLPf",
+          "position": 3,
+          "name": "",
+          "hidden": true,
+          "skill": "intimidation",
+          "dc": 20,
+          "lore": false
+        },
+        "kZQRjnTJH5KbGvYH": {
+          "id": "kZQRjnTJH5KbGvYH",
+          "position": 4,
+          "name": "",
+          "hidden": true,
+          "skill": "crafting",
+          "dc": 16,
+          "lore": false
+        },
+        "wcD9XmeIGZvq9ju9": {
+          "id": "wcD9XmeIGZvq9ju9",
+          "position": 5,
+          "name": "",
+          "hidden": true,
+          "skill": "underworld-lore",
+          "dc": 14,
+          "lore": true
+        },
+        "jfy9L4RzarSFIOTr": {
+          "id": "jfy9L4RzarSFIOTr",
+          "position": 6,
+          "name": "",
+          "hidden": true,
+          "skill": "mercantile-lore",
+          "dc": 14,
+          "lore": true
+        },
+        "fpHfSCvWyMVX7Iqq": {
+          "id": "fpHfSCvWyMVX7Iqq",
+          "position": 7,
+          "name": "",
+          "hidden": true,
+          "skill": "thievery",
+          "dc": 18,
+          "lore": false
+        },
+        "hsDgmv2LaFpK0L8C": {
+          "id": "hsDgmv2LaFpK0L8C",
+          "position": 8,
+          "name": "",
+          "hidden": true,
+          "skill": "kintargo-lore",
+          "dc": 16,
+          "lore": true
+        },
+        "YhfJ1S3PE7lBiqN5": {
+          "id": "YhfJ1S3PE7lBiqN5",
+          "position": 9,
+          "name": "",
+          "hidden": true,
+          "skill": "art-lore",
+          "dc": 18,
+          "lore": true
+        },
+        "9k2LNSRemh1g9ZpB": {
+          "id": "9k2LNSRemh1g9ZpB",
+          "position": 10,
+          "name": "",
+          "hidden": true,
+          "skill": "society",
+          "dc": 16,
+          "lore": false
+        },
+        "sZgYCclpKLQExbZY": {
+          "id": "sZgYCclpKLQExbZY",
+          "position": 11,
+          "name": "",
+          "hidden": true,
+          "skill": "gossip-lore",
+          "dc": 14,
+          "lore": true
+        }
+      },
+      "influence": {},
+      "weaknesses": {
+        "a5YziJt1gg1vzPBN": {
+          "id": "a5YziJt1gg1vzPBN",
+          "position": 1,
+          "name": "Налоги",
+          "hidden": true,
+          "description": "<p>аэлен ненавидит новые налоги Барзиллая Труна, которые душат его бизнес. Если ПИ используют эту тему при проверке Дипломатии или Знания, КС снижается на 2.</p>",
+          "modifier": {
+            "used": false,
+            "value": 2
+          }
+        },
+        "NTmON0IriPLabiPb": {
+          "id": "NTmON0IriPLabiPb",
+          "position": 2,
+          "name": "Долгосрочные Отношения",
+          "hidden": false,
+          "description": "<p>Если ПИ предлагают ему долгосрочный канал сбыта (покупать у него регулярно), первая такая проверка имеет сниженный КС. Разовая Слабость!</p>",
+          "modifier": {
+            "used": false,
+            "value": 2
+          }
+        }
+      },
+      "resistances": {
+        "W7TQE07okWuDhd7n": {
+          "id": "W7TQE07okWuDhd7n",
+          "position": 1,
+          "name": "Фанатики, а не дельцы",
+          "hidden": true,
+          "description": "<p>Каэлен сразу распознает пустые лозунги о \"свободе\" (штраф -2 ко всем проверкам, если ПИ давят только на мораль).</p>",
+          "modifier": {
+            "used": false,
+            "value": 2
+          }
+        }
+      },
+      "penalties": {}
+    }
+  },
+  "chase": {},
+  "research": {},
+  "infiltration": {
+    "1O5ywT6n1QFUfyco": {
+      "id": "1O5ywT6n1QFUfyco",
+      "position": 1,
+      "name": "Узники Соли",
+      "version": "0.8.8",
+      "background": "modules/pf2e-ts-adv-pf1ehr/97/portret/kossranit.webp",
+      "awarenessPoints": {
+        "breakpoints": {
+          "wu5TGhJudGNffZGX": {
+            "id": "wu5TGhJudGNffZGX",
+            "breakpoint": 5,
+            "dcIncrease": 1,
+            "description": "PF2ESubsystems.Infiltration.Awareness.DefaultBreakpoint5",
+            "position": 1,
+            "hidden": true,
+            "inUse": false
+          },
+          "Td7x6N5IVA2AdsEu": {
+            "id": "Td7x6N5IVA2AdsEu",
+            "breakpoint": 10,
+            "description": "<p>Увеличьте КС преодоление на 2</p>",
+            "position": 2,
+            "hidden": true,
+            "inUse": false,
+            "dcIncrease": 2
+          },
+          "1MOxU2iOpefmZhWB": {
+            "id": "1MOxU2iOpefmZhWB",
+            "breakpoint": 15,
+            "dcIncrease": null,
+            "description": "<p>Когда персонажи впервые достигают этого ранга, случается осложнение.</p>",
+            "position": 3,
+            "hidden": true,
+            "inUse": false
+          },
+          "5aaZVPi9GKGKXIyj": {
+            "id": "5aaZVPi9GKGKXIyj",
+            "breakpoint": 20,
+            "description": "<p>Проникновение проваливается. В соленые копи приходит слишком много доттари чтобы осуществить побег с узниками. Узники помогают вам сбежать но остаются сами в соленые копи. Утром их переводят в настоящую тюрьму.</p>",
+            "position": 4,
+            "hidden": true,
+            "inUse": false,
+            "dcIncrease": null
+          }
+        },
+        "current": 5,
+        "hidden": 0
+      },
+      "objectives": {
+        "pLmiwwIQWAfasoGX": {
+          "id": "pLmiwwIQWAfasoGX",
+          "name": "Проникновение",
+          "position": 1,
+          "hidden": false,
+          "obstacles": {
+            "qfCSauaRq4ynQVn5": {
+              "id": "qfCSauaRq4ynQVn5",
+              "img": "icons/skills/movement/arrow-upward-white.webp",
+              "name": "Путь сквозь «Снежное» Марево",
+              "position": 1,
+              "skillChecks": {
+                "XFUbdODCszh0v5ps": {
+                  "id": "XFUbdODCszh0v5ps",
+                  "skills": {
+                    "ziiLy8CS4XEvRf4m": {
+                      "id": "ziiLy8CS4XEvRf4m",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "stealth"
+                    },
+                    "ILplI0b78woO8OJH": {
+                      "id": "ILplI0b78woO8OJH",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "acrobatics"
+                    },
+                    "2mxizMIhD38mpozQ": {
+                      "id": "2mxizMIhD38mpozQ",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "athletics"
+                    },
+                    "N0BoAhj8bD2TrJPy": {
+                      "id": "N0BoAhj8bD2TrJPy",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "performance"
+                    },
+                    "q9wydKVWlOGZfQdi": {
+                      "id": "q9wydKVWlOGZfQdi",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "deception"
+                    },
+                    "ke6Mn1PG9WB5teVZ": {
+                      "id": "ke6Mn1PG9WB5teVZ",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "crafting"
+                    },
+                    "yBOHrWxhQBSX3EVQ": {
+                      "id": "yBOHrWxhQBSX3EVQ",
+                      "lore": true,
+                      "difficulty": {
+                        "leveledDC": false,
+                        "DC": 14
+                      },
+                      "skill": "Architecture-lore"
+                    }
+                  },
+                  "hidden": true,
+                  "description": "",
+                  "dcAdjustments": [],
+                  "difficulty": {
+                    "leveledDC": true
+                  }
+                }
+              },
+              "hidden": false,
+              "individual": false,
+              "infiltrationPoints": {
+                "max": 4,
+                "current": 4
+              },
+              "infiltrationPointData": {},
+              "description": "<p>Герои должны миновать D1 или D3, скрываясь в клубах соляной пыли или используя грохот печей D4 как прикрытие.</p><p><strong>Скрытность, Акробатика (Лов)</strong>: Перебежки от мешка к мешку, когда стража отвлекается на карты.</p><p><strong>Атлетика (Сил):</strong> Проход через Соляную яму (D2), карабкаясь по балкам под самым потолком.</p><p><strong>Выступление, Обман (Хар):</strong> Имитация ритмичного стука молотов или скрипа механизмов, чтобы скрыть шум шагов.</p><p><strong>Ремесло, Знание Архитектуры (Инт):</strong> Идентификация вентиляционных шахт или слабых перекрытий для скрытного перемещения.</p>"
+            },
+            "Ao9jL2xYFWDKfpye": {
+              "id": "Ao9jL2xYFWDKfpye",
+              "img": "icons/skills/movement/arrows-up-trio-red.webp",
+              "name": "Тихая Свобода",
+              "position": 2,
+              "skillChecks": {
+                "2Z89L0bNi8BfcPtA": {
+                  "id": "2Z89L0bNi8BfcPtA",
+                  "skills": {
+                    "qe5JmWRQJGczCddV": {
+                      "id": "qe5JmWRQJGczCddV",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "thievery"
+                    },
+                    "wLU7AUvKFoUVNq0O": {
+                      "id": "wLU7AUvKFoUVNq0O",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "medicine"
+                    },
+                    "9LBXn6ij2QQ2avaN": {
+                      "id": "9LBXn6ij2QQ2avaN",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "survival"
+                    },
+                    "H1gXk0dv1gRYnnib": {
+                      "id": "H1gXk0dv1gRYnnib",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "diplomacy"
+                    },
+                    "DipEnpRNoKrOuc7r": {
+                      "id": "DipEnpRNoKrOuc7r",
+                      "lore": true,
+                      "difficulty": {
+                        "leveledDC": false,
+                        "DC": 14
+                      },
+                      "skill": "legal-lore"
+                    },
+                    "DOxjesyVMHI9Y3vq": {
+                      "id": "DOxjesyVMHI9Y3vq",
+                      "lore": true,
+                      "difficulty": {
+                        "leveledDC": false,
+                        "DC": 18
+                      },
+                      "skill": "attack-lore"
+                    }
+                  },
+                  "hidden": true,
+                  "description": "",
+                  "dcAdjustments": [],
+                  "difficulty": {
+                    "leveledDC": true
+                  }
+                }
+              },
+              "hidden": false,
+              "individual": false,
+              "infiltrationPoints": {
+                "max": 4,
+                "current": 4
+              },
+              "infiltrationPointData": {},
+              "description": "<p>Дверь камеры (D5) заперта, а узники изнурены и напуганы. Любой лишний звук привлечет внимание Коссрани.</p><p><strong>Воровство (Лов)</strong>: Тонкая работа по вскрытию замка камеры и кандалов.</p><p><strong>Медицина, Выживание (Мдр)</strong>: Быстрое купирование приступа удушающего кашля у Форвиана Кроу.</p><p><strong>Дипломатия (Хар)</strong>: Шепот надежды, чтобы убедить сломленных людей довериться вам и идти молча.</p><p><strong>Знание Закон (Инт)</strong>: Блеф перед случайно зашедшим охранником о «необходимой инспекции заключенных».</p><p><strong>Атака (против КБ18):</strong> Быстро вырубить члена ЧГГ.</p>"
+            }
+          }
+        },
+        "aECSIO8QcX0kdSjb": {
+          "id": "aECSIO8QcX0kdSjb",
+          "name": "Побег",
+          "position": 2,
+          "hidden": false,
+          "obstacles": {
+            "0yRlqOR6hD9da7GA": {
+              "id": "0yRlqOR6hD9da7GA",
+              "img": "icons/skills/movement/figure-running-gray.webp",
+              "name": "Тропа Белой Пыли",
+              "position": 1,
+              "skillChecks": {
+                "zHx2fD3REzFHVnCU": {
+                  "id": "zHx2fD3REzFHVnCU",
+                  "skills": {
+                    "stw8TjZbP1ehQD4s": {
+                      "id": "stw8TjZbP1ehQD4s",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "survival"
+                    },
+                    "cO2fVKdWrIs4vKwu": {
+                      "id": "cO2fVKdWrIs4vKwu",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "stealth"
+                    },
+                    "91sCtPVaqwl7wjYO": {
+                      "id": "91sCtPVaqwl7wjYO",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "acrobatics"
+                    },
+                    "Dzw7JBEzVWFbJu2t": {
+                      "id": "Dzw7JBEzVWFbJu2t",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "intimidation"
+                    },
+                    "2j3RntWpfY8IzAnJ": {
+                      "id": "2j3RntWpfY8IzAnJ",
+                      "lore": true,
+                      "difficulty": {
+                        "leveledDC": false,
+                        "DC": 14
+                      },
+                      "skill": "labor-lore"
+                    },
+                    "UZVQrYZnOWpNvuT0": {
+                      "id": "UZVQrYZnOWpNvuT0",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "arcana"
+                    },
+                    "xv0eiO6qS1TzOElU": {
+                      "id": "xv0eiO6qS1TzOElU",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "nature"
+                    },
+                    "U8LvB46y2LCRDgFc": {
+                      "id": "U8LvB46y2LCRDgFc",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "occultism"
+                    },
+                    "jgEVUNvmiIECEId8": {
+                      "id": "jgEVUNvmiIECEId8",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "religion"
+                    },
+                    "5uUMJd7SgQc9ENtE": {
+                      "id": "5uUMJd7SgQc9ENtE",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "athletics"
+                    }
+                  },
+                  "hidden": true,
+                  "description": "",
+                  "dcAdjustments": [],
+                  "difficulty": {
+                    "leveledDC": true
+                  }
+                }
+              },
+              "hidden": false,
+              "individual": false,
+              "infiltrationPoints": {
+                "max": 4,
+                "current": 4
+              },
+              "infiltrationPointData": {},
+              "description": "<p>Узники — это обуза. Они оставляют белые следы на камнях и тяжело дышат. Нужно вывести их через рабочий двор D6 в ночную прохладу Кинтарго.</p><p>Соль повсюду. Нужно заметать следы и направлять беглецов так, чтобы они не споткнулись в темноте.</p><p><strong>Выживание (Мдр) Скрытность (Лов):</strong> Скрытие белых отпечатков босых ног на грязном полу двора.</p><p><strong>Акробатика (Лов) Атлетика (Сил):</strong> Помощь узникам при переходе через узкие мостки над ямой или завалами мусора.</p><p><strong>Запугивание (Хар):</strong> Жесткий, властный шепот, заставляющий паникующего смутьяна замолчать и двигаться.</p><p><strong>Знание Труда, Аркана, Оккультизм (Инт) Религия, Природа (Мдр):</strong> Использование рабочих инструментов или тележек для создания отвлекающего грохота в другой стороне двора. В том числе магией.</p>"
+            },
+            "aMDkxtAvJeEpXcSh": {
+              "id": "aMDkxtAvJeEpXcSh",
+              "img": "icons/skills/movement/feet-bladed-boots-fire.webp",
+              "name": "Последний Заслон",
+              "position": 2,
+              "skillChecks": {
+                "72o4M3ETBXg1yDyg": {
+                  "id": "72o4M3ETBXg1yDyg",
+                  "skills": {
+                    "hM8V2KaMOZ0UteKn": {
+                      "id": "hM8V2KaMOZ0UteKn",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "stealth"
+                    },
+                    "MBFv6hZeyky7XIai": {
+                      "id": "MBFv6hZeyky7XIai",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "perception"
+                    },
+                    "M5mJFRDF22d3xqUy": {
+                      "id": "M5mJFRDF22d3xqUy",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "athletics"
+                    },
+                    "Q4CQJ1LpxHCUDtXH": {
+                      "id": "Q4CQJ1LpxHCUDtXH",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "deception"
+                    },
+                    "jHGQRTbFGjg2Rg4J": {
+                      "id": "jHGQRTbFGjg2Rg4J",
+                      "lore": true,
+                      "difficulty": {
+                        "leveledDC": false,
+                        "DC": 14
+                      },
+                      "skill": "ratfolk-lore"
+                    },
+                    "jzwRBXtfJTUTxwuv": {
+                      "id": "jzwRBXtfJTUTxwuv",
+                      "lore": true,
+                      "difficulty": {
+                        "leveledDC": false,
+                        "DC": 14
+                      },
+                      "skill": "Engineering-lore"
+                    },
+                    "UEQxGzTbzGkSveeJ": {
+                      "id": "UEQxGzTbzGkSveeJ",
+                      "lore": false,
+                      "difficulty": {
+                        "leveledDC": true
+                      },
+                      "skill": "crafting"
+                    }
+                  },
+                  "hidden": true,
+                  "description": "",
+                  "dcAdjustments": [],
+                  "difficulty": {
+                    "leveledDC": true
+                  }
+                }
+              },
+              "hidden": false,
+              "individual": false,
+              "infiltrationPoints": {
+                "max": 4,
+                "current": 4
+              },
+              "infiltrationPointData": {},
+              "description": "<p>Выход уже близок, но в казарме D7 спят головорезы, а Коссрани может выйти на крыльцо в любую секунду.</p><p><strong>Скрытность (Лов) Восприятие (Мдр):</strong> Групповое перемещение в тенях, синхронизированное с мерцанием факелов.</p><p><strong>Атлетика (Сил):</strong> Подъем обессиленных узников на внешнюю стену или через черный ход.</p><p><strong>Обман (Хар) Знание: Крысолюд (Инт):</strong> Бросок камня или имитация звука крысы в мешках, чтобы увести взгляд часового от ворот.</p><p><strong>Знание Инженерии, Ремесло (Инт):</strong> Блокировка ворот казармы D7 снаружи, чтобы охрана не смогла быстро выбежать на помощь.</p>"
+            }
+          }
+        }
+      },
+      "preparations": {
+        "activities": {
+          "goTYM4zCStlYqYfW": {
+            "id": "goTYM4zCStlYqYfW",
+            "name": "Слежка",
+            "edgeLabel": "Слежка",
+            "skillChecks": {
+              "9KkVLt92DB4R6USx": {
+                "id": "9KkVLt92DB4R6USx",
+                "skills": {
+                  "MPd0jLPaixETadbf": {
+                    "id": "MPd0jLPaixETadbf",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "stealth"
+                  },
+                  "BnVzLUENvwk5tHqp": {
+                    "id": "BnVzLUENvwk5tHqp",
+                    "lore": true,
+                    "difficulty": {
+                      "leveledDC": false,
+                      "DC": 14
+                    },
+                    "skill": "crowd-lore"
+                  },
+                  "y6ojXqCc7nOtlVl3": {
+                    "id": "y6ojXqCc7nOtlVl3",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "perception"
+                  }
+                },
+                "hidden": true,
+                "description": "",
+                "dcAdjustments": [],
+                "difficulty": {
+                  "leveledDC": true
+                }
+              }
+            },
+            "position": null,
+            "hidden": false,
+            "tags": [],
+            "cost": "",
+            "requirements": "",
+            "description": "<p>Слежка за патрулями во внутреннем дворе (D6).</p><p>Вы можете использовать команду Преступники (любого ранга), чтобы они выполнили проверку @Rebellion[type:secrecy|dc:15] взамен предложеных. Если вы делаете так, то это не тратит вашу попытку действий группы, и в случае провала или крит.провала, вы просто не получаете Очко Выгоды и команда расходует Действие Восстание из Фазы Содержания. В случае успеха или крит.успеха вы получаете эффект успеха или крит.успеха этой проверки и команда не тратит Действие Восстание из Фазы Действий.</p>",
+            "results": {
+              "criticalSuccess": {
+                "degreeOfSuccess": "criticalSuccess",
+                "description": "<p>Вы получаете 1 Очко Выгоды. Следующая проверка в Фазе Подготовки получает удачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "success": {
+                "degreeOfSuccess": "success",
+                "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+                "nrOutcomes": 1,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "failure": {
+                "degreeOfSuccess": "failure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "criticalFailure": {
+                "degreeOfSuccess": "criticalFailure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности. Следующая проверка в Фазе Подготовки получает неудачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              }
+            },
+            "maxAttempts": 1
+          },
+          "E577JTDhhCv7DECn": {
+            "id": "E577JTDhhCv7DECn",
+            "name": "Протоколы",
+            "edgeLabel": "Протоколы",
+            "skillChecks": {
+              "59gLopBjmTJQCShF": {
+                "id": "59gLopBjmTJQCShF",
+                "skills": {
+                  "5rKV9VIo6RtWwo1i": {
+                    "id": "5rKV9VIo6RtWwo1i",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "society"
+                  },
+                  "GQrthWvj71KvM3hc": {
+                    "id": "GQrthWvj71KvM3hc",
+                    "lore": true,
+                    "difficulty": {
+                      "leveledDC": false,
+                      "DC": 14
+                    },
+                    "skill": "legal-lore"
+                  },
+                  "hfNDDojw5uVOw4uF": {
+                    "id": "hfNDDojw5uVOw4uF",
+                    "lore": true,
+                    "difficulty": {
+                      "leveledDC": false,
+                      "DC": 14
+                    },
+                    "skill": "kintargo-lore"
+                  }
+                },
+                "hidden": true,
+                "description": "",
+                "dcAdjustments": [],
+                "difficulty": {
+                  "leveledDC": true
+                }
+              }
+            },
+            "position": null,
+            "hidden": false,
+            "tags": [],
+            "cost": "",
+            "requirements": "",
+            "description": "<p>Изучение торговых накладных и времени смены караула.</p><p>Вы можете использовать Повстанцы (любого ранга) чтобы они выполнили проверку @Rebellion[type:security|dc:15] взамен предложеных. Если вы делаете так, то это не тратит вашу попытку действий группы, и в случае провала или крит.провала, вы просто не получаете Очко Выгоды и команда расходует Действие Восстание из Фазы Содержания. В случае успеха или крит.успеха вы получаете эффект успеха или крит.успеха этой проверки и команда не тратит Действие Восстание из Фазы Действий.</p>",
+            "results": {
+              "criticalSuccess": {
+                "degreeOfSuccess": "criticalSuccess",
+                "description": "<p>Вы получаете 1 Очко Выгоды. Следующая проверка в Фазе Подготовки получает удачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "success": {
+                "degreeOfSuccess": "success",
+                "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+                "nrOutcomes": 1,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "failure": {
+                "degreeOfSuccess": "failure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "criticalFailure": {
+                "degreeOfSuccess": "criticalFailure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности. Следующая проверка в Фазе Подготовки получает неудачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              }
+            },
+            "maxAttempts": 1
+          },
+          "MFvMNpxi8K78ydQ4": {
+            "id": "MFvMNpxi8K78ydQ4",
+            "name": "Притворство",
+            "edgeLabel": "Притворство",
+            "skillChecks": {
+              "z0qXncYdgmwMC6BE": {
+                "id": "z0qXncYdgmwMC6BE",
+                "skills": {
+                  "KJSQ26T1F5Jwc1en": {
+                    "id": "KJSQ26T1F5Jwc1en",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "deception"
+                  },
+                  "ostIZTPZD8oyZ0f8": {
+                    "id": "ostIZTPZD8oyZ0f8",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "performance"
+                  },
+                  "Bh5Q3qVreGTlFeOa": {
+                    "id": "Bh5Q3qVreGTlFeOa",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "diplomacy"
+                  },
+                  "gLllXBd4sSCrVhzu": {
+                    "id": "gLllXBd4sSCrVhzu",
+                    "lore": true,
+                    "difficulty": {
+                      "leveledDC": false,
+                      "DC": 14
+                    },
+                    "skill": "espionage-lore"
+                  }
+                },
+                "hidden": true,
+                "description": "",
+                "dcAdjustments": [],
+                "difficulty": {
+                  "leveledDC": true
+                }
+              }
+            },
+            "position": null,
+            "hidden": false,
+            "tags": [],
+            "cost": "",
+            "requirements": "",
+            "description": "<p>Выдача себя за перекупщика соли, чтобы бегло осмотреть приемную (D1).</p><p>Вы можете использовать Торговцы (любого ранга) чтобы они выполнили проверку @Rebellion[type:secrecy|dc:15] взамен предложеных. Если вы делаете так, то это не тратит вашу попытку действий группы, и в случае провала или крит.провала, вы просто не получаете Очко Выгоды и команда расходует Действие Восстание из Фазы Содержания. В случае успеха или крит.успеха вы получаете эффект успеха или крит.успеха этой проверки и команда не тратит Действие Восстание из Фазы Действий.</p>",
+            "results": {
+              "criticalSuccess": {
+                "degreeOfSuccess": "criticalSuccess",
+                "description": "<p>Вы получаете 1 Очко Выгоды. Следующая проверка в Фазе Подготовки получает удачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "success": {
+                "degreeOfSuccess": "success",
+                "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+                "nrOutcomes": 1,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "failure": {
+                "degreeOfSuccess": "failure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "criticalFailure": {
+                "degreeOfSuccess": "criticalFailure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности. Следующая проверка в Фазе Подготовки получает неудачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              }
+            },
+            "maxAttempts": 1
+          },
+          "ef5rxWFQeA1IG6OJ": {
+            "id": "ef5rxWFQeA1IG6OJ",
+            "name": "Слухи",
+            "edgeLabel": "Слухи",
+            "skillChecks": {
+              "QBJem44vMfUrDvTH": {
+                "id": "QBJem44vMfUrDvTH",
+                "skills": {
+                  "OwThKNTkUTlH1DuY": {
+                    "id": "OwThKNTkUTlH1DuY",
+                    "lore": false,
+                    "difficulty": {
+                      "leveledDC": true
+                    },
+                    "skill": "thievery"
+                  },
+                  "pXTvrWfoy989Kbjn": {
+                    "id": "pXTvrWfoy989Kbjn",
+                    "lore": true,
+                    "difficulty": {
+                      "leveledDC": false,
+                      "DC": 14
+                    },
+                    "skill": "underwold-lore"
+                  },
+                  "vs5SSXrjn6Ha1KLC": {
+                    "id": "vs5SSXrjn6Ha1KLC",
+                    "lore": true,
+                    "difficulty": {
+                      "leveledDC": false,
+                      "DC": 14
+                    },
+                    "skill": "gossip-lore"
+                  }
+                },
+                "hidden": true,
+                "description": "",
+                "dcAdjustments": [],
+                "difficulty": {
+                  "leveledDC": true
+                }
+              }
+            },
+            "position": null,
+            "hidden": false,
+            "tags": [],
+            "cost": "",
+            "requirements": "",
+            "description": "<p>Поиск слухов о том, где держат ключи от кандалов.</p><p>Вы можете использовать Советники (любого ранга) чтобы они выполнили проверку @Rebellion[type:security|dc:15] взамен предложеных. Если вы делаете так, то это не тратит вашу попытку действий группы, и в случае провала или крит.провала, вы просто не получаете Очко Выгоды и команда расходует Действие Восстание из Фазы Содержания. В случае успеха или крит.успеха вы получаете эффект успеха или крит.успеха этой проверки и команда не тратит Действие Восстание из Фазы Действий.</p>",
+            "results": {
+              "criticalSuccess": {
+                "degreeOfSuccess": "criticalSuccess",
+                "description": "<p>Вы получаете 1 Очко Выгоды. Следующая проверка в Фазе Подготовки получает удачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "success": {
+                "degreeOfSuccess": "success",
+                "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+                "nrOutcomes": 1,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "failure": {
+                "degreeOfSuccess": "failure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              },
+              "criticalFailure": {
+                "degreeOfSuccess": "criticalFailure",
+                "description": "<p>Вы получаете 1 Очко Осведомленности. Следующая проверка в Фазе Подготовки получает неудачу.</p>",
+                "nrOutcomes": 0,
+                "inUse": true,
+                "fakeDegreeOfSuccess": ""
+              }
+            },
+            "maxAttempts": 1
+          }
+        },
+        "usesPreparation": true
+      },
+      "pins": {
+        "sidebar": "premise"
+      },
+      "premise": "<p><strong>Правило хорошего тона:</strong> Вы не повторяете туже проверку навыка, что вы сами использовали в прошлый раз.</p><p><strong>Успешное Проникновение:</strong> Вы получаете @Rebellion[(1d6)[supporters]] + количество стороников в размере 15 минус набраные Очки Осведомленности (возможно минусовое значение до 0 сторонников, но не ниже 0)</p>",
+      "gmNotes": "",
+      "hidden": false,
+      "started": false,
+      "edgePoints": {
+        "7uS2RAx3zVZrwAdD": {
+          "id": "7uS2RAx3zVZrwAdD",
+          "position": 1,
+          "faked": false,
+          "name": "Притворство",
+          "originActivity": "MFvMNpxi8K78ydQ4",
+          "originResult": "success_1",
+          "awarenessPoints": 0,
+          "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+          "hiddenDescription": "",
+          "used": true
+        },
+        "HHD16ywPiWFvhFxZ": {
+          "id": "HHD16ywPiWFvhFxZ",
+          "position": 2,
+          "faked": false,
+          "name": "Слухи",
+          "originActivity": "ef5rxWFQeA1IG6OJ",
+          "originResult": "success_1",
+          "awarenessPoints": 0,
+          "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+          "hiddenDescription": "",
+          "used": true
+        },
+        "lZWw2fALDZcp3nt5": {
+          "id": "lZWw2fALDZcp3nt5",
+          "position": 3,
+          "faked": false,
+          "name": "Протоколы",
+          "originActivity": "E577JTDhhCv7DECn",
+          "originResult": "success_1",
+          "awarenessPoints": 0,
+          "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+          "hiddenDescription": "",
+          "used": true
+        },
+        "7pIyXjaCjQJvHVgA": {
+          "id": "7pIyXjaCjQJvHVgA",
+          "position": 4,
+          "faked": false,
+          "name": "Слежка",
+          "originActivity": "goTYM4zCStlYqYfW",
+          "originResult": "success_1",
+          "awarenessPoints": 0,
+          "description": "<p>Вы получаете 1 Очко Выгоды.</p>",
+          "hiddenDescription": "",
+          "used": false
+        }
+      },
+      "complications": {
+        "YCoQ6IsqHPZIGqYs": {
+          "id": "YCoQ6IsqHPZIGqYs",
+          "position": 1,
+          "name": "Патруль Охраны",
+          "skillChecks": {
+            "M388SYpoiwmu0Yof": {
+              "id": "M388SYpoiwmu0Yof",
+              "skills": {
+                "FDEdAabQtCptmwlP": {
+                  "id": "FDEdAabQtCptmwlP",
+                  "lore": false,
+                  "difficulty": {
+                    "leveledDC": true
+                  },
+                  "skill": "deception"
+                },
+                "KeQdptqDXwtk92TK": {
+                  "id": "KeQdptqDXwtk92TK",
+                  "lore": false,
+                  "difficulty": {
+                    "leveledDC": true
+                  },
+                  "skill": "stealth"
+                },
+                "Pn2TbRz93BjJiJrP": {
+                  "id": "Pn2TbRz93BjJiJrP",
+                  "lore": false,
+                  "difficulty": {
+                    "leveledDC": true
+                  },
+                  "skill": "perception"
+                }
+              },
+              "hidden": true,
+              "description": "",
+              "dcAdjustments": [],
+              "difficulty": {
+                "leveledDC": true
+              }
+            }
+          },
+          "hidden": true,
+          "infiltrationPoints": {},
+          "description": "<p>Ваши действие привлекли внимание патруль охраны и они идут проверить что там за шум.</p><p>Вы можете совершить проверку Обман, Скрытность или Восприятие, чтобы отвлечь стражу. В случае провала вам предстоит столкновение в котором каждый раунд будет расти Очко Осведомленности.</p><p>Но так же в случае провала вы можете потратить Действие Восстание из Фазы Действий, чтобы команда Преступники или Повстанцы быстро избавились от патруля.</p>",
+          "results": {
+            "criticalSuccess": {
+              "degreeOfSuccess": "criticalSuccess",
+              "description": "",
+              "inUse": false
+            },
+            "success": {
+              "degreeOfSuccess": "success",
+              "description": "",
+              "inUse": false
+            },
+            "failure": {
+              "degreeOfSuccess": "failure",
+              "description": "",
+              "inUse": false
+            },
+            "criticalFailure": {
+              "degreeOfSuccess": "criticalFailure",
+              "description": "",
+              "inUse": false
+            }
+          },
+          "trigger": "Вы в Фазе 2 и вы впервые набрали 5 Очков Осведомленности"
+        },
+        "89jhAK3Y1FYiAzD0": {
+          "id": "89jhAK3Y1FYiAzD0",
+          "position": 2,
+          "name": "Патруль Доттари",
+          "skillChecks": {
+            "wEZA5RwvWD5SZnA3": {
+              "id": "wEZA5RwvWD5SZnA3",
+              "skills": {
+                "RKxQrsPzFrMRF6o2": {
+                  "id": "RKxQrsPzFrMRF6o2",
+                  "lore": false,
+                  "difficulty": {
+                    "leveledDC": true
+                  },
+                  "skill": "deception"
+                },
+                "Q248et8gBNHB17Co": {
+                  "id": "Q248et8gBNHB17Co",
+                  "lore": false,
+                  "difficulty": {
+                    "leveledDC": true
+                  },
+                  "skill": "stealth"
+                },
+                "FOG25TAjgJM5VgIh": {
+                  "id": "FOG25TAjgJM5VgIh",
+                  "lore": false,
+                  "difficulty": {
+                    "leveledDC": true
+                  },
+                  "skill": "perception"
+                }
+              },
+              "hidden": true,
+              "description": "",
+              "dcAdjustments": [],
+              "difficulty": {
+                "leveledDC": true
+              }
+            }
+          },
+          "hidden": true,
+          "infiltrationPoints": {},
+          "description": "<p>Ваши шумные действия привлекли Патурль Доттари с улицы.</p><p>Вы можете совершить проверку Обман, Скрытность или Восприятие, чтобы отвлечь стражу. В случае провала этот патруль доттари присоединится к охране Соленые Копи.</p><p>Но так же в случае провала вы можете потратить Действие Восстание из Фазы Действий, чтобы команда Советники или Торговцы, чтобы они отвлекли патруль доттари от Соленых Копей.</p>",
+          "results": {
+            "criticalSuccess": {
+              "degreeOfSuccess": "criticalSuccess",
+              "description": "",
+              "inUse": false
+            },
+            "success": {
+              "degreeOfSuccess": "success",
+              "description": "",
+              "inUse": false
+            },
+            "failure": {
+              "degreeOfSuccess": "failure",
+              "description": "",
+              "inUse": false
+            },
+            "criticalFailure": {
+              "degreeOfSuccess": "criticalFailure",
+              "description": "",
+              "inUse": false
+            }
+          },
+          "trigger": "Фаза 3. Вы впервые набрали 15 Очков Осведомленности."
+        }
+      },
+      "opportunities": {
+        "uZtcMWVWdNteDSFX": {
+          "id": "uZtcMWVWdNteDSFX",
+          "position": 1,
+          "name": "Помощь Проникновения",
+          "hidden": true,
+          "description": "<p>Вы можете использовать команды Преступники (любого ранга) или Повстанцы (любого ранга) выполнили дополнительную проверку в любом шаге Фазе 2. Вы можете использовать только одну команду в один раунд.</p><p>Преступники: @Rebellion[type:secrecy|dc:15]</p><p>Повстанцы: @Rebellion[type:security|dc:15]</p><p>Это не тратит ваши попытки преодоления. В случае провала или крит.провала ваша команда тратит Действие Восстание из Фазы Восстания.</p>",
+          "requirements": "Фаза 2. У вас есть команды Престуники или Повстанцы."
+        },
+        "KVUlEP6q1aODwr4o": {
+          "id": "KVUlEP6q1aODwr4o",
+          "position": 2,
+          "name": "Помощь Побега",
+          "hidden": true,
+          "description": "<p>Вы можете использовать Действие Восстания из Фазы Действия, чтобы Преступники (любого ранга) или Повстанцы (любого ранга) выполнили дополнительную проверку в любом шаге Фазе 3. Вы можете использовать только одну команду в один раунд.</p><p>Торговцы: @Rebellion[type:secrecy|dc:15]</p><p>Советники: @Rebellion[type:security|dc:15]</p><p>Это не тратит ваши попытки преодоления. В случае провала или крит.провала ваша команда тратит Действие Восстание из Фазы Восстания.</p>",
+          "requirements": "Фаза 3. У вас есть команда Торговцы или Советники"
+        }
+      }
+    }
+  }
+}
