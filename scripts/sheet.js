@@ -33,6 +33,17 @@ function getManagerDisplayName(managerId) {
     return managerId;
 }
 
+function hasActiveStrategistOfficer(data) {
+    if (!Array.isArray(data?.officers)) return false;
+    return data.officers.some((officer) =>
+        officer?.role === "strategist" &&
+        officer.actorId &&
+        !officer.disabled &&
+        !officer.missing &&
+        !officer.captured
+    );
+}
+
 export class RebellionSheet extends FormApplication {
     static get defaultOptions() {
         return foundry.utils.mergeObject(super.defaultOptions, {
@@ -258,6 +269,7 @@ export class RebellionSheet extends FormApplication {
 
         const hasVendalfek = DataHandler.isAllyActive(data, 'vendalfek');
         const hasManticce = DataHandler.isAllyActive(data, 'manticce');
+        const hasStrategist = hasActiveStrategistOfficer(data);
 
         // Create Silver Ravens team (always first, but NOT counted as a team)
         // Silver Ravens is a virtual team for PC actions, not a real team
@@ -384,7 +396,8 @@ export class RebellionSheet extends FormApplication {
                     }
                 }
             }
-            let total = baseBonus + mgrBonus + (team.isStrategistTarget ? 2 : 0);
+            const strategistBonusActive = hasStrategist && team.isStrategistTarget;
+            let total = baseBonus + mgrBonus + (strategistBonusActive ? 2 : 0);
             if (team.currentAction === 'recruitSupporters' && DataHandler.isAllyActive(data, 'laria')) total += 2;
             if (team.currentAction === 'rescue' && DataHandler.isAllyActive(data, 'octavio')) total += 4;
             if (team.currentAction === 'rescue' && team.type === 'orderTorrent') total += 4;
@@ -403,7 +416,7 @@ export class RebellionSheet extends FormApplication {
             let mods = [];
             if (checkType) mods.push(`База (${CHECK_LABELS[checkType]}): ${baseBonus}`);
             if (mgrBonus) mods.push(`Командир: ${mgrBonus}`);
-            if (team.isStrategistTarget) mods.push(`Стратег: +2`);
+            if (strategistBonusActive) mods.push(`Стратег: +2`);
             if (team.currentAction === 'recruitSupporters' && DataHandler.isAllyActive(data, 'laria')) mods.push("Лариа: +2");
             if (team.currentAction === 'rescue' && DataHandler.isAllyActive(data, 'octavio')) mods.push("Октавио: +4");
             if (team.currentAction === 'rescue' && team.type === 'orderTorrent') mods.push("Орден Потока: +4");
@@ -577,7 +590,7 @@ export class RebellionSheet extends FormApplication {
             maintenanceEventCount: DataHandler.countMaintenanceEvents(data),
             // Strategist status
             strategistUsed: data.strategistUsed || false,
-            hasStrategist: data.officers.some(o => o.role === 'strategist' && o.actorId),
+            hasStrategist,
             // Manticce bonus action status
             manticceBonusUsedThisWeek: data.manticceBonusUsedThisWeek || false
         };
@@ -1803,7 +1816,7 @@ export class RebellionSheet extends FormApplication {
         }
 
         // Бонус стратега
-        if (team.isStrategistTarget) {
+        if (hasActiveStrategistOfficer(data) && team.isStrategistTarget) {
             additionalMods.push({ label: "Стратег", value: 2 });
             totalMod += 2;
         }
@@ -2220,7 +2233,7 @@ export class RebellionSheet extends FormApplication {
         }
 
         // Проверяем лимит действий, но не для бонусного действия стратега
-        const isStrategistBonus = team.isStrategistTarget && !data.strategistUsed;
+        const isStrategistBonus = hasActiveStrategistOfficer(data) && team.isStrategistTarget && !data.strategistUsed;
         if (!isStrategistBonus && DataHandler.getActionsRemaining(data) <= 0) {
             ui.notifications.warn("Действия исчерпаны на этой неделе!");
             return;
@@ -5150,6 +5163,24 @@ export class RebellionSheet extends FormApplication {
 
     async _applyEventEffects(event, data) {
         let message = "";
+        const toNumber = (value, fallback = 0) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
+
+        const isTemporaryEventActiveNow = (targetEvent) => {
+            if (!targetEvent || targetEvent.isPersistent) return false;
+            const currentWeek = toNumber(data?.week, 0);
+            const weekStarted = toNumber(targetEvent.weekStarted, 0);
+            const duration = Math.max(1, toNumber(targetEvent.duration, 1));
+            return weekStarted <= currentWeek && currentWeek < (weekStarted + duration);
+        };
+
+        const extendTemporaryEventDurationIfActive = (targetEvent) => {
+            if (!isTemporaryEventActiveNow(targetEvent)) return false;
+            targetEvent.duration = Math.max(1, toNumber(targetEvent.duration, 1)) + 1;
+            return true;
+        };
 
         switch (event.name) {
             case "Неделя Секретности":
@@ -5158,7 +5189,8 @@ export class RebellionSheet extends FormApplication {
 
                 // Добавляем событие в активные события на следующую неделю
                 const currentEvents = data.events || [];
-                if (!currentEvents.find(e => e.name === event.name)) {
+                const existingSecrecyWeekEvent = currentEvents.find(e => e.name === event.name);
+                if (!existingSecrecyWeekEvent) {
                     const newEvent = {
                         name: event.name,
                         desc: event.desc,
@@ -5172,7 +5204,13 @@ export class RebellionSheet extends FormApplication {
                     await DataHandler.update({ events: currentEvents });
                     console.log("✅ Событие добавлено в базу");
                 } else {
-                    console.log("❌ Событие уже существует");
+                    if (extendTemporaryEventDurationIfActive(existingSecrecyWeekEvent)) {
+                        await DataHandler.update({ events: currentEvents });
+                        console.log("✅ Длительность события продлена на 1 неделю");
+                        message += `<p style="color:green"><strong>Неделя Секретности продлена!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                    } else {
+                        console.log("❌ Событие уже существует");
+                    }
                 }
                 message += `<p style="color:green"><strong>Неделя Секретности!</strong> +6 к проверкам на след. неделю. Удвоенная вербовка.</p>`;
                 break;
@@ -5191,7 +5229,8 @@ export class RebellionSheet extends FormApplication {
 
                 // Добавляем событие в активные события на следующую неделю
                 const currentEvents2 = data.events || [];
-                if (!currentEvents2.find(e => e.name === event.name)) {
+                const existingReducedThreatEvent = currentEvents2.find(e => e.name === event.name);
+                if (!existingReducedThreatEvent) {
                     const newEvent2 = {
                         name: event.name,
                         desc: event.desc,
@@ -5206,7 +5245,13 @@ export class RebellionSheet extends FormApplication {
                     await DataHandler.update({ events: currentEvents2 });
                     console.log("✅ Событие добавлено в базу");
                 } else {
-                    console.log("❌ Событие уже существует");
+                    if (extendTemporaryEventDurationIfActive(existingReducedThreatEvent)) {
+                        await DataHandler.update({ events: currentEvents2 });
+                        console.log("✅ Длительность события продлена на 1 неделю");
+                        message += `<p style="color:green"><strong>Уменьшенная угроза продлена!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                    } else {
+                        console.log("❌ Событие уже существует");
+                    }
                 }
                 message += `<p style="color:green"><strong>Уменьшенная угроза!</strong> Опасность будет снижена на 10 на след. неделю.</p>`;
                 break;
@@ -5238,7 +5283,8 @@ export class RebellionSheet extends FormApplication {
 
                 // Добавляем событие в активные события на следующую неделю
                 const currentEvents3 = data.events || [];
-                if (!currentEvents3.find(e => e.name === event.name)) {
+                const existingCalmEvent = currentEvents3.find(e => e.name === event.name);
+                if (!existingCalmEvent) {
                     const newEvent3 = {
                         name: event.name,
                         desc: event.desc,
@@ -5252,7 +5298,13 @@ export class RebellionSheet extends FormApplication {
                     await DataHandler.update({ events: currentEvents3 });
                     console.log("✅ Событие добавлено в базу");
                 } else {
-                    console.log("❌ Событие уже существует");
+                    if (extendTemporaryEventDurationIfActive(existingCalmEvent)) {
+                        await DataHandler.update({ events: currentEvents3 });
+                        console.log("✅ Длительность события продлена на 1 неделю");
+                        message += `<p style="color:green"><strong>Все спокойно продлено!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                    } else {
+                        console.log("❌ Событие уже существует");
+                    }
                 }
 
                 // Событие "Все спокойно" предотвращает события на следующую неделю
@@ -5395,6 +5447,10 @@ export class RebellionSheet extends FormApplication {
                         await DataHandler.update({ events: dangerousEvents });
                         message += `<p style="color:red"><strong>Опасные времена стали постоянными!</strong> Эффект будет действовать навсегда.</p>`;
                         console.log("✅ Событие стало постоянным");
+                    } else if (extendTemporaryEventDurationIfActive(existingEvent)) {
+                        await DataHandler.update({ events: dangerousEvents });
+                        message += `<p style="color:red"><strong>Опасные времена продлены!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                        console.log("✅ Длительность события продлена на 1 неделю");
                     } else {
                         console.log("❌ Событие уже существует");
                         message += `<p style="color:red"><strong>Опасные времена продолжаются!</strong> Эффект уже активен.</p>`;
@@ -5490,6 +5546,10 @@ export class RebellionSheet extends FormApplication {
                         await DataHandler.update({ events: patrolsEvents });
                         message += `<p style="color:red"><strong>Усиленные патрули стали постоянными!</strong> Эффект будет действовать навсегда.</p>`;
                         console.log("✅ Событие стало постоянным");
+                    } else if (extendTemporaryEventDurationIfActive(existingPatrolsEvent)) {
+                        await DataHandler.update({ events: patrolsEvents });
+                        message += `<p style="color:red"><strong>Усиленные патрули продлены!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                        console.log("✅ Длительность события продлена на 1 неделю");
                     } else {
                         console.log("❌ Событие уже существует");
                         message += `<p style="color:red"><strong>Усиленные патрули продолжаются!</strong> Эффект уже активен.</p>`;
@@ -5542,6 +5602,10 @@ export class RebellionSheet extends FormApplication {
                         await DataHandler.update({ events: moraleEvents });
                         message += `<p style="color:red"><strong>Низкий боевой дух стал постоянным!</strong> Эффект будет действовать навсегда.</p>`;
                         console.log("✅ Событие стало постоянным");
+                    } else if (extendTemporaryEventDurationIfActive(existingMoraleEvent)) {
+                        await DataHandler.update({ events: moraleEvents });
+                        message += `<p style="color:red"><strong>Низкий боевой дух продлен!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                        console.log("✅ Длительность события продлена на 1 неделю");
                     } else {
                         console.log("❌ Событие уже существует");
                         message += `<p style="color:red"><strong>Низкий боевой дух продолжается!</strong> Эффект уже активен.</p>`;
@@ -5594,6 +5658,10 @@ export class RebellionSheet extends FormApplication {
                         await DataHandler.update({ events: diseaseEvents });
                         message += `<p style="color:red"><strong>Болезнь стала постоянной!</strong> Эффект будет действовать навсегда.</p>`;
                         console.log("✅ Событие стало постоянным");
+                    } else if (extendTemporaryEventDurationIfActive(existingDiseaseEvent)) {
+                        await DataHandler.update({ events: diseaseEvents });
+                        message += `<p style="color:red"><strong>Болезнь продлена!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                        console.log("✅ Длительность события продлена на 1 неделю");
                     } else {
                         console.log("❌ Событие уже существует");
                         message += `<p style="color:red"><strong>Болезнь продолжается!</strong> Эффект уже активен.</p>`;
@@ -5686,6 +5754,10 @@ export class RebellionSheet extends FormApplication {
                         await DataHandler.update({ events: disorderEvents });
                         message += `<p style="color:red"><strong>Разлад в рядах стал постоянным!</strong> Эффект будет действовать навсегда.</p>`;
                         console.log("✅ Событие стало постоянным");
+                    } else if (extendTemporaryEventDurationIfActive(existingDisorderEvent)) {
+                        await DataHandler.update({ events: disorderEvents });
+                        message += `<p style="color:red"><strong>Разлад в рядах продлен!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                        console.log("✅ Длительность события продлена на 1 неделю");
                     } else {
                         console.log("❌ Событие уже существует");
                         message += `<p style="color:red"><strong>Разлад в рядах продолжается!</strong> Эффект уже активен.</p>`;
@@ -5846,6 +5918,11 @@ export class RebellionSheet extends FormApplication {
                         message += `<button class="show-inquisition-info-btn" style="margin-top: 10px;">ℹ️ Как завершить Инквизицию</button>`;
 
                         console.log("✅ Событие стало постоянным");
+                    } else if (extendTemporaryEventDurationIfActive(existingInquisitionEvent)) {
+                        await DataHandler.update({ events: inquisitionEvents });
+                        message += `<p style="color:red"><strong>Инквизиция продлена!</strong> Эффект увеличен еще на 1 неделю.</p>`;
+                        message += `<button class="show-inquisition-info-btn" style="margin-top: 10px;">ℹ️ Как завершить Инквизицию</button>`;
+                        console.log("✅ Длительность события продлена на 1 неделю");
                     } else {
                         console.log("❌ Событие уже существует");
                         message += `<p style="color:red"><strong>Инквизиция продолжается!</strong> Эффект уже активен.</p>`;
@@ -5871,7 +5948,8 @@ export class RebellionSheet extends FormApplication {
             event.name !== "Инквизиция" &&
             event.name !== "Предатель") {
             const currentEvents = data.events || [];
-            if (!currentEvents.find(e => e.name === event.name)) {
+            const existingPersistentEvent = currentEvents.find(e => e.name === event.name);
+            if (!existingPersistentEvent) {
                 currentEvents.push({
                     name: event.name,
                     desc: event.desc,
@@ -5882,6 +5960,9 @@ export class RebellionSheet extends FormApplication {
                     isPersistent: event.persistent || false
                 });
                 await DataHandler.update({ events: currentEvents });
+            } else if (extendTemporaryEventDurationIfActive(existingPersistentEvent)) {
+                await DataHandler.update({ events: currentEvents });
+                message += `<p style="color:#d84315"><strong>${event.name} продлено!</strong> Длительность эффекта увеличена на 1 неделю.</p>`;
             }
         }
 
@@ -6469,7 +6550,7 @@ export class RebellionSheet extends FormApplication {
         const data = DataHandler.get();
 
         // Проверяем, есть ли офицер-стратег
-        const hasStrategist = data.officers.some(o => o.role === 'strategist' && o.actorId);
+        const hasStrategist = hasActiveStrategistOfficer(data);
         if (!hasStrategist) {
             ui.notifications.warn("Нет назначенного офицера-стратега!");
             ev.currentTarget.checked = false;

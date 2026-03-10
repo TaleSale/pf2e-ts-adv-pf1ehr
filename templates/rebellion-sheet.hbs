@@ -309,8 +309,10 @@
                                 <i class="fas fa-ban"></i> Соперничество
                             </label>
                             {{/if}}
+                            {{#if ../hasStrategist}}
                             <label><input type="checkbox" class="strategist-check" data-index="{{team.idx}}" {{checked
                                     team.isStrategistTarget}} {{#if ../strategistUsed}}disabled{{/if}}> [Стратег]{{#if ../strategistUsed}} (использован){{/if}}</label>
+                            {{/if}}
                             {{/unless}}
                         </div>
                         {{#unless team.isSilverRavens}}
@@ -415,8 +417,10 @@
                                     <i class="fas fa-ban"></i> Соперничество
                                 </label>
                                 {{/if}}
+                                {{#if ../hasStrategist}}
                                 <label><input type="checkbox" class="strategist-check" data-index="{{team.idx}}" {{checked
                                         team.isStrategistTarget}} {{#if ../strategistUsed}}disabled{{/if}}> [Стратег]{{#if ../strategistUsed}} (использован){{/if}}</label>
+                                {{/if}}
                             </div>
                             <input type="hidden" name="teams.{{team.idx}}.type" value="{{team.type}}">
                             <div class="control-row">
