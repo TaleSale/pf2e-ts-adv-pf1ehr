@@ -33,6 +33,12 @@ function getManagerDisplayName(managerId) {
     return managerId;
 }
 
+function getPreferredRollActor() {
+    const controlledToken = canvas?.tokens?.controlled?.find(token => token?.actor) ?? null;
+    if (controlledToken?.actor) return controlledToken.actor;
+    return game.user?.character ?? null;
+}
+
 function hasActiveStrategistOfficer(data) {
     if (!Array.isArray(data?.officers)) return false;
     return data.officers.some((officer) =>
@@ -7106,8 +7112,11 @@ export class RebellionSheet extends FormApplication {
                     type: "untyped"
                 }));
 
-                const actor = game.user.character || game.actors.find(a => a.hasPlayerOwner && a.type === "character") || game.actors.first();
-                if (!actor) console.warn("Rebellion: Still no actor found. Dialog might not appear.");
+                const actor = getPreferredRollActor();
+                if (!actor) {
+                    ui.notifications.warn("Для этого броска нужно выбрать токен на сцене или назначить персонажа текущему пользователю.");
+                    return;
+                }
 
                 try {
                     // Set state for main.js hook to recognize this roll
@@ -7333,12 +7342,7 @@ export class RebellionSheet extends FormApplication {
         const skillName = CHECK_LABELS[skill] || PF2E_SKILL_LABELS[skill] || skill;
 
         // Actor selection logic
-        let actor = null;
-        if (canvas.tokens.controlled.length > 0) {
-            actor = canvas.tokens.controlled[0].actor;
-        } else {
-            actor = game.user.character;
-        }
+        const actor = getPreferredRollActor();
 
         if (!actor) {
             ui.notifications.warn("Для броска из листа персонажа нужно выбрать токен на сцене или назначить персонажа!");
@@ -7398,7 +7402,11 @@ export class RebellionSheet extends FormApplication {
                 ...checkBonus.parts.map(p => new game.pf2e.Modifier({ label: p.label, modifier: p.value, type: "untyped" })),
                 ...extraModifiers.map(m => new game.pf2e.Modifier({ label: m.label, modifier: m.value, type: "untyped" }))
             ];
-            const actor = game.user.character || game.actors.find(a => a.hasPlayerOwner && a.type === "character") || game.actors.first();
+            const actor = getPreferredRollActor();
+            if (!actor) {
+                ui.notifications.warn("Для этого броска нужно выбрать токен на сцене или назначить персонажа текущему пользователю.");
+                return;
+            }
 
             try {
                 game.rebellionState = { ...state, timestamp: Date.now() };
@@ -8442,7 +8450,11 @@ export class RebellionSheet extends FormApplication {
         try {
             if (game.pf2e && game.pf2e.Check) {
                 const modifiers = checkBonus.parts.map(p => new game.pf2e.Modifier({ label: p.label, modifier: p.value, type: "untyped" }));
-                const actor = game.user.character || game.actors.find(a => a.hasPlayerOwner && a.type === "character");
+                const actor = getPreferredRollActor();
+                if (!actor) {
+                    ui.notifications.warn("Для этого броска нужно выбрать токен на сцене или назначить персонажа текущему пользователю.");
+                    return;
+                }
 
                 await game.pf2e.Check.roll(
                     new game.pf2e.CheckModifier(CHECK_LABELS[type], { modifiers }),
@@ -10919,17 +10931,12 @@ export class RebellionSheet extends FormApplication {
                 }));
             }
 
-            let actorForRoll = null;
-            if (canvas.tokens.controlled.length > 0) {
-                actorForRoll = canvas.tokens.controlled[0].actor;
-            } else {
-                actorForRoll = game.user.character;
-            }
+                const actorForRoll = getPreferredRollActor();
 
-            if (!actorForRoll) {
-                ui.notifications.warn("Для броска из листа персонажа нужно выбрать токен на сцене или назначить персонажа!");
-                return;
-            }
+                if (!actorForRoll) {
+                    ui.notifications.warn("Для броска из листа персонажа нужно выбрать токен на сцене или назначить персонажа!");
+                    return;
+                }
 
             try {
                 game.rebellionState = {

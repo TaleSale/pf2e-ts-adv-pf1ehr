@@ -210,6 +210,32 @@ function getManagerDisplayName(managerId) {
     return managerId;
 }
 
+function getPreferredRollActor() {
+    const controlledToken = canvas?.tokens?.controlled?.find(token => token?.actor) ?? null;
+    if (controlledToken?.actor) return controlledToken.actor;
+    return game.user?.character ?? null;
+}
+
+function guardChatButtonClick(ev) {
+    const button = ev.currentTarget;
+    if (button?.dataset?.rebellionClickHandled === "true") return false;
+    if (button?.dataset) button.dataset.rebellionClickHandled = "true";
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
+    return true;
+}
+
+function isPrimaryAutomationClient(message = null) {
+    const activeGM = game.users.find(user => user.isGM && user.active);
+    if (activeGM) return activeGM.id === game.user.id;
+
+    const messageUserId = message?.user?.id ?? message?.author?.id ?? null;
+    if (messageUserId) return messageUserId === game.user.id;
+
+    return true;
+}
+
 Hooks.once("init", () => {
 
     // Register @Rebellion enricher for inline check buttons
@@ -435,7 +461,11 @@ Hooks.once("ready", () => {
                 type: "untyped"
             }));
 
-            const actor = game.user.character || game.actors.find(a => a.hasPlayerOwner && a.type === "character");
+            const actor = getPreferredRollActor();
+            if (!actor) {
+                ui.notifications.warn("Для этого броска нужно выбрать токен на сцене или назначить персонажа текущему пользователю.");
+                return;
+            }
 
             // Set state for result handling
             game.rebellionState = {
@@ -488,8 +518,7 @@ Hooks.once("ready", () => {
 
     // Global listener for @Rebellion chat buttons
     $(document).on('click', '.rebellion-chat-btn', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
         const typeExpr = target.dataset.type;
@@ -515,7 +544,7 @@ Hooks.once("ready", () => {
 
     // Global listener for roll buttons from chat
     $(document).on('click', '.rebellion-roll-from-chat', async (ev) => {
-        ev.preventDefault();
+        if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
         const typeExpr = button.dataset.type;
@@ -532,8 +561,7 @@ Hooks.once("ready", () => {
 
     // Global listener for @Rebellion inline check buttons
     $(document).on('click', '.rebellion-inline-check', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
         const typeExpr = target.dataset.type;
@@ -567,8 +595,7 @@ Hooks.once("ready", () => {
 
     // Global listener for @Rebellion[%] inline check buttons
     $(document).on('click', '.rebellion-percent-check', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
         const hasDanger = target.dataset.hasDanger === "true";
@@ -580,8 +607,7 @@ Hooks.once("ready", () => {
 
     // Global listener for @Rebellion[%] chat buttons
     $(document).on('click', '.rebellion-percent-chat-btn', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
         const hasDanger = target.dataset.hasDanger === "true";
@@ -611,7 +637,7 @@ Hooks.once("ready", () => {
 
     // Global listener for percent roll buttons from chat
     $(document).on('click', '.rebellion-percent-roll-from-chat', async (ev) => {
-        ev.preventDefault();
+        if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
         const hasDanger = button.dataset.hasDanger === "true";
@@ -628,8 +654,7 @@ Hooks.once("ready", () => {
 
     // Global listener for @Rebellion dice roll buttons
     $(document).on('click', '.rebellion-dice-roll', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
         const diceExpr = target.dataset.dice;
@@ -663,8 +688,7 @@ Hooks.once("ready", () => {
 
     // Global listener for @Rebellion dice chat buttons
     $(document).on('click', '.rebellion-dice-chat-btn', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
         const diceExpr = target.dataset.dice;
@@ -692,7 +716,7 @@ Hooks.once("ready", () => {
 
     // Global listener for dice roll buttons from chat
     $(document).on('click', '.rebellion-dice-roll-from-chat', async (ev) => {
-        ev.preventDefault();
+        if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
         const diceExpr = button.dataset.dice;
@@ -731,7 +755,7 @@ Hooks.once("ready", () => {
 
     // Global listener for stat adjustment buttons
     $(document).on('click', '.rebellion-adjust-stat', async (ev) => {
-        ev.preventDefault();
+        if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
         const statType = button.dataset.stat;
@@ -863,7 +887,7 @@ Hooks.once("ready", () => {
 
     for (const [selector, method] of Object.entries(BUTTON_ACTIONS)) {
         $(document).on('click', selector, (ev) => {
-            ev.preventDefault();
+            if (!guardChatButtonClick(ev)) return;
             const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
             sheet[method](ev);
         });
@@ -875,6 +899,7 @@ Hooks.once("ready", () => {
         const customRollFlags = message.flags?.["pf2e-ts-adv-pf1ehr"] ?? {};
         const nestedRollContext = rollContext?.context ?? {};
         const isRerollMessage = !!customRollFlags.isReroll || !!rollContext.isReroll || !!nestedRollContext.isReroll;
+        const canProcessAutomations = isPrimaryAutomationClient(message);
         const eventRollResults = game.rebellionEventRollResults ?? (game.rebellionEventRollResults = {});
         const teamActionRollResults = game.rebellionTeamActionRollResults ?? (game.rebellionTeamActionRollResults = {});
         const silverActionRollResults = game.rebellionSilverActionRollResults ?? (game.rebellionSilverActionRollResults = {});
@@ -988,6 +1013,7 @@ Hooks.once("ready", () => {
             return Number.isFinite(numeric) ? numeric : null;
         };
 
+        if (canProcessAutomations) {
         // Обработка результатов @Rebellion inline check
         if (game.rebellionState?.isRebellionInlineCheck && message.isRoll) {
             const stateTimestamp = game.rebellionState.timestamp || 0;
@@ -2432,6 +2458,7 @@ Hooks.once("ready", () => {
             }
             // Кнопки переброса обрабатываются ниже в общем блоке.
         }
+        }
 
         if (!message.isRoll) return;
 
@@ -2846,6 +2873,7 @@ Hooks.on("renderActorDirectory", (app, html, data) => {
 Hooks.on('createChatMessage', async (message) => {
     // Only process rolls
     if (!message.isRoll) return;
+    if (!isPrimaryAutomationClient(message)) return;
 
     // Check if it's a skill check
     // We need to match against active events in DataHandler
@@ -2935,14 +2963,14 @@ Hooks.on('createChatMessage', async (message) => {
 // Обработчики для события "Дьявольское проникновение"
 $(document).on('click', '.roll-devil-weeks-btn', (ev) => {
     console.log("=== DEVIL WEEKS BUTTON CLICKED (main.js) ===");
-    ev.preventDefault();
+    if (!guardChatButtonClick(ev)) return;
     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
     sheet._onDevilWeeksRoll(ev);
 });
 
 $(document).on('click', '.roll-devil-perception-btn', (ev) => {
     console.log("=== DEVIL PERCEPTION BUTTON CLICKED (main.js) ===");
-    ev.preventDefault();
+    if (!guardChatButtonClick(ev)) return;
     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
     sheet._onDevilPerceptionRoll(ev);
 });
@@ -2962,4 +2990,3 @@ $(document).on('click', '.show-inquisition-info-btn', (ev) => {
         speaker: { alias: "Система восстания" }
     });
 });
-
