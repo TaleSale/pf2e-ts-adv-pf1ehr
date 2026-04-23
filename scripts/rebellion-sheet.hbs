@@ -1,0 +1,836 @@
+<form class="rebellion-sheet-window" autocomplete="off">
+    <header class="sheet-header">
+        <div class="header-left">
+            <i class="fas fa-crow header-logo"></i>
+            <h1 class="cinzel" style="margin-left: 10px;">Серебряные Вороны</h1>
+        </div>
+        <div class="header-right">
+            <span class="cinzel" style="margin-right:10px;">Неделя {{data.week}}</span>
+            <span class="cinzel">Ранг: {{data.rank}}</span>
+            {{#if isGM}}
+            <a class="reset-btn" title="Сброс"><i class="fas fa-cogs"></i></a>
+            {{/if}}
+        </div>
+    </header>
+
+    <div class="resources-strip">
+        <div class="resource-item"><label>Сторонники</label>
+            <div class="spinner-control"><a data-action="decrease" data-target="supporters">-</a><input type="number"
+                    name="supporters" value="{{data.supporters}}"><a data-action="increase"
+                    data-target="supporters">+</a></div>
+        </div>
+        <div class="resource-item"><label>Население</label>
+            <div class="spinner-control"><a data-action="decrease" data-target="population">-</a><input type="number"
+                    name="population" value="{{data.population}}"><a data-action="increase"
+                    data-target="population">+</a></div>
+        </div>
+        <div class="resource-item {{#if treasuryLow}}danger{{/if}}"><label>Казна (мин. {{minTreasury}})</label>
+            <div class="spinner-control"><a data-action="decrease" data-target="treasury">-</a><input type="number"
+                    name="treasury" value="{{data.treasury}}"><a data-action="increase" data-target="treasury">+</a>
+            </div>
+        </div>
+        <div class="resource-item"><label>Известность</label>
+            <div class="spinner-control"><a data-action="decrease" data-target="notoriety">-</a><input type="number"
+                    name="notoriety" value="{{data.notoriety}}"><a data-action="increase" data-target="notoriety">+</a>
+            </div>
+        </div>
+        <div class="resource-item danger"><label>Опасность %</label>
+            <div class="spinner-control"><a data-action="decrease" data-target="danger">-</a><input type="number"
+                    name="danger" value="{{data.danger}}" {{#if (ne data.danger effectiveDanger)}}style="color: #e74c3c; font-weight: bold;" title="Эффективная опасность: {{effectiveDanger}}% (изменена событиями)"{{/if}}><a data-action="increase" data-target="danger">+</a></div>
+            {{#if (ne data.danger effectiveDanger)}}
+            <div style="font-size: 0.8em; color: #e74c3c; margin-top: 2px;">
+                Эффективная: {{effectiveDanger}}%
+            </div>
+            {{/if}}
+        </div>
+
+    </div>
+
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="overview">Обзор</a>
+        <a class="item" data-tab="officers">Офицеры</a>
+        <a class="item" data-tab="teams">Команды</a>
+        <a class="item" data-tab="allies">Союзники</a>
+        <a class="item" data-tab="caches">Тайники</a>
+        <a class="item" data-tab="progression">Развитие</a>
+        <a class="item" data-tab="effects">Эффекты</a>
+    </nav>
+
+    <section class="sheet-body">
+        <div class="tab" data-tab="overview" data-group="primary">
+            <div class="overview-stats">
+                <div><strong>Шанс события:</strong> {{eventChance}}%</div>
+                <div style="display:flex; align-items:center;">
+                    <strong>Приоритет:</strong>&nbsp;
+                    <select name="focus">{{selectOptions focusTypes
+                        selected=data.focus labelAttr="label"}}</select>
+                </div>
+                <div><strong>Действий:</strong> {{actionsRemaining}}/{{maxActions}}</div>
+                <div><strong>Команд:</strong> {{operationalTeamCount}}/{{maxTeams}}</div>
+            </div>
+
+            <div class="checks-grid">
+                <div class="check-card">
+                    <h3><a class="roll-check" data-type="loyalty"><i class="fas fa-dice-d20"></i></a> Верность</h3>
+                    <div class="check-value">{{#if (gte bonuses.loyalty.total 0)}}+{{/if}}{{bonuses.loyalty.total}}
+                    </div>
+                    <div class="breakdown-list">{{#each bonuses.loyalty.parts as |part|}}<div>{{part.label}}: {{#if (gte
+                            part.value 0)}}+{{/if}}{{part.value}}</div>{{/each}}</div>
+                </div>
+                <div class="check-card">
+                    <h3><a class="roll-check" data-type="security"><i class="fas fa-dice-d20"></i></a> Безопасность</h3>
+                    <div class="check-value">{{#if (gte bonuses.security.total 0)}}+{{/if}}{{bonuses.security.total}}
+                    </div>
+                    <div class="breakdown-list">{{#each bonuses.security.parts as |part|}}<div>{{part.label}}: {{#if
+                            (gte part.value 0)}}+{{/if}}{{part.value}}</div>{{/each}}</div>
+                </div>
+                <div class="check-card">
+                    <h3><a class="roll-check" data-type="secrecy"><i class="fas fa-dice-d20"></i></a> Секретность</h3>
+                    <div class="check-value">{{#if (gte bonuses.secrecy.total 0)}}+{{/if}}{{bonuses.secrecy.total}}
+                    </div>
+                    <div class="breakdown-list">{{#each bonuses.secrecy.parts as |part|}}<div>{{part.label}}: {{#if (gte
+                            part.value 0)}}+{{/if}}{{part.value}}</div>{{/each}}</div>
+                </div>
+            </div>
+
+            {{#if bonuses.recruitmentBonus}}<div style="text-align:center; color:#194680; margin-bottom:5px;">
+                <strong>Бонус Вербовщиков:</strong> +{{bonuses.recruitmentBonus}} сторонников
+            </div>{{/if}}
+
+
+
+            <h3 class="cinzel" style="display: flex; align-items: center; justify-content: space-between;">
+                <span>1. Фаза Содержания</span>
+                {{#if isGM}}
+                <button type="button" class="maintenance-settings-btn control-btn" title="Настройки фазы содержания">
+                    <i class="fas fa-cog"></i>
+                </button>
+                {{/if}}
+            </h3>
+            <div class="phase-steps">
+                <!-- Подфаза начала фазы содержания -->
+                <div class="phase-step maintenance-start-phase" style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border: 2px solid #4caf50; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #2e7d32; font-size: 1.1em;">
+                        <i class="fas fa-play-circle"></i> Начало фазы содержания
+                    </h4>
+                    <div class="maintenance-start-actions">
+                        {{debug disabledTeamCount "disabledTeamCount"}}
+                        {{debug missingTeamCount "missingTeamCount"}}
+                        {{debug maintenanceEventCount "maintenanceEventCount"}}
+                        {{#if (or (gt disabledTeamCount 0) (gt missingTeamCount 0) (gt maintenanceEventCount 0))}}
+                            {{#if (gt disabledTeamCount 0)}}
+                                <div class="phase-step-mini">
+                                    <span>Восстановить недееспособные команды ({{disabledTeamCount}})</span>
+                                    <button type="button" class="step-btn small" data-action="maintenance-recover-disabled"><i class="fas fa-wrench"></i> Восстановить</button>
+                                </div>
+                            {{/if}}
+                            {{#if (gt missingTeamCount 0)}}
+                                <div class="phase-step-mini">
+                                    <span>Обработать пропавшие команды ({{missingTeamCount}})</span>
+                                    <button type="button" class="step-btn small" data-action="maintenance-handle-missing"><i class="fas fa-search"></i> Обработать</button>
+                                </div>
+                            {{/if}}
+                            <!-- DEBUG: maintenanceEventCount = {{maintenanceEventCount}} -->
+                            {{#if (gt maintenanceEventCount 0)}}
+                                <div class="phase-step-mini">
+                                    <span>Обработать события начала фазы ({{maintenanceEventCount}})</span>
+                                    <button type="button" class="step-btn small" data-action="maintenance-handle-events"><i class="fas fa-calendar-check"></i> Обработать</button>
+                                </div>
+                            {{else}}
+                                <!-- DEBUG: maintenanceEventCount <= 0, значение = {{maintenanceEventCount}} -->
+                            {{/if}}
+                        {{else}}
+                            <div style="color: #666; font-style: italic; text-align: center;">
+                                <i class="fas fa-check-circle"></i> Нет действий для выполнения
+                            </div>
+                        {{/if}}
+                    </div>
+                </div>
+
+                <div class="phase-step">
+                    <span>Шаг 1) Убыль сторонников (Верность КС 10)</span>
+                    <button type="button" class="step-btn" data-action="maintenance-attrition"><i
+                            class="fas fa-dice-d20"></i> Выполнить</button>
+                </div>
+                <div class="phase-step">
+                    <span>Шаг 2) Проверка Известности {{#if (gte data.notoriety 100)}}<strong
+                            style="color:red">(100!)</strong>{{/if}}</span>
+                    <button type="button" class="step-btn" data-action="maintenance-notoriety" {{#unless (gte
+                        data.notoriety 100)}}disabled{{/unless}}><i class="fas fa-skull"></i> Казни</button>
+                </div>
+                <div class="phase-step">
+                    <span>Шаг 3) Проверка казны (мин. {{minTreasury}} зм) {{#if treasuryLow}}<strong
+                            style="color:red">(низкая!)</strong>{{/if}}</span>
+                    <button type="button" class="step-btn" data-action="maintenance-treasury" {{#unless
+                        treasuryLow}}disabled{{/unless}}><i class="fas fa-coins"></i> Потери</button>
+                </div>
+                <div class="phase-step">
+                    <span>Шаг 4) Повышение ранга {{#if canRecruit}}({{data.supporters}} сторонников){{/if}}</span>
+                    <button type="button" class="step-btn" data-action="maintenance-rankup"><i
+                            class="fas fa-arrow-up"></i> Проверить</button>
+                </div>
+                <div class="phase-step">
+                    <span>Шаг 5) Вклады/снятия казны</span>
+                    <div class="treasury-controls">
+                        <button type="button" class="step-btn small" data-action="treasury-withdraw"><i
+                                class="fas fa-minus"></i></button>
+                        <span class="treasury-display">{{data.treasury}} зм</span>
+                        <button type="button" class="step-btn small" data-action="treasury-deposit"><i
+                                class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="cinzel">2. Фаза Деятельности</h3>
+            <div class="activity-summary">
+                <span><strong>Действий:</strong> {{actionsRemaining}}/{{maxActions}}</span>
+                <span><strong>Команд:</strong> {{operationalTeamCount}}</span>
+                <button type="button" class="step-btn" data-action="go-to-teams"><i class="fas fa-users"></i> К
+                    командам</button>
+            </div>
+
+            <h3 class="cinzel">3. Фаза Событий</h3>
+            <div class="event-controls">
+                <div class="event-buttons">
+                    <button type="button" class="step-btn" data-action="event-check"><i class="fas fa-dice-d20"></i>
+                        Проверка</button>
+                </div>
+            </div>
+
+            <!-- Journal UI hidden -->
+            <div style="display:none;"><textarea name="phaseReport">{{data.phaseReport}}</textarea></div>
+            {{#if isGM}}
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="button" class="test-event-btn add-officer-btn">
+                    <i class="fas fa-flask"></i> Тест События
+                </button>
+            </div>
+            {{/if}}
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="button" class="add-officer-btn archive-btn">
+                    <i class="fas fa-book"></i> Завершить неделю
+                </button>
+            </div>
+        </div>
+
+        <div class="tab" data-tab="officers" data-group="primary">
+            <button type="button" class="add-officer-btn" style="margin-bottom:10px;"><i class="fas fa-plus"></i>
+                Добавить офицера</button>
+            <div class="teams-list">
+                {{#each officerList as |off|}}
+                <div class="team-card {{#if (or off.missing off.captured)}}officer-missing-captured{{/if}}">
+                    <div class="team-img-container"><img src="{{off.actorImg}}" class="team-img"></div>
+                    <div class="team-details">
+                        <div class="team-header"><span>{{off.label}}</span><a class="remove-officer control-btn"
+                                data-index="{{off.index}}"><i class="fas fa-trash"></i></a></div>
+                        <input type="hidden" name="officers.{{off.index}}.role" value="{{off.role}}">
+                        <div class="team-desc">{{off.desc}}</div>
+                        {{#if off.attributeLabel}}<div style="font-size:10px; margin:2px 0; color: #666;">
+                            <strong>Характеристики:</strong> {{off.attributeLabel}}
+                        </div>
+                        {{/if}}
+                        {{#if off.needsCheckSelector}}<div style="font-size:10px; margin:2px 0;"><strong>+1 к (макс
+                                2):</strong> {{#each off.checkOptions as |opt|}}<label style="margin-left:5px;"><input
+                                    type="checkbox" class="sentinel-check" data-index="{{../index}}"
+                                    value="{{opt.key}}" {{#if (lookup ../selectedChecks opt.key)}}checked{{/if}}>
+                                {{opt.label}}</label>{{/each}}</div>{{/if}}
+                        <div class="control-row" style="margin-top:5px;">
+                            <label class="control-label">Персонаж: {{#if off.isInvalid}}<span
+                                    style="color:red; font-size: 0.8em;">(Неактивен)</span>{{/if}}</label>
+                            <div class="control-content">
+                                <select name="officers.{{off.index}}.actorId" {{#if
+                                    off.isInvalid}}style="border: 1px solid red;" {{/if}}>
+                                    <option value="">Выберите...</option>
+                                    {{#if off.isInvalid}}<option value="{{off.actorId}}" selected disabled>
+                                        {{off.actorName}} (Недоступен)</option>{{/if}}
+                                    {{#each ../candidateActors as |actor|}}<option value="{{actor.id}}" {{#if (eq
+                                        actor.id off.actorId)}}selected{{/if}}>{{actor.name}}</option>{{/each}}
+                                </select>
+                            </div>
+                        </div>
+                        <div style="text-align:right; font-size:11px;">Бонус: +{{off.bonus}}</div>
+                        <div class="checkbox-row">
+                            <label><input type="checkbox" name="officers.{{off.index}}.missing" {{checked off.missing}}> Пропал</label>
+                            <label><input type="checkbox" name="officers.{{off.index}}.captured" {{checked off.captured}}> Схвачен</label>
+                        </div>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+
+        <div class="tab" data-tab="teams" data-group="primary">
+            <div class="teams-header">
+                <button type="button" class="hire-team-btn"><i class="fas fa-plus"></i> Нанять команду</button>
+                {{#if isGM}}
+                    {{#if hasUniqueTeams}}
+                        <button type="button" class="hire-unique-team-btn"><i class="fas fa-star"></i> Нанять уникальную команду</button>
+                    {{/if}}
+                {{/if}}
+                <span class="teams-count">Команд: {{operationalTeamCount}} / {{maxTeams}}, Действий: {{actionsRemaining}} / {{maxActions}}</span>
+                {{#if isGM}}
+                <button type="button" class="teams-settings-btn control-btn" title="Настройки команд и действий">
+                    <i class="fas fa-cog"></i>
+                </button>
+                {{/if}}
+            </div>
+            <div class="teams-list" data-team-type="regular">
+                {{#each regularTeams as |team|}}
+                <div class="team-card {{#unless team.isOperational}}team-inactive{{/unless}} {{#if team.blockedByRivalry}}team-blocked-rivalry{{/if}} {{#if team.isSilverRavens}}silver-ravens-team{{/if}}" data-index="{{team.idx}}" {{#unless team.isSilverRavens}}draggable="true"{{/unless}}>
+                    <div class="team-img-container">
+                        <img src="{{team.icon}}" class="team-img">
+                    </div>
+                    <div class="team-details">
+                        <div class="team-header">
+                            <span>{{team.label}} <small class="team-rank">(Ранг {{team.rank}})</small></span>
+                            <div class="team-controls">
+                                {{#unless team.isSilverRavens}}
+                                {{#if team.disabled}}
+                                <a class="recover-team-btn control-btn" data-index="{{team.idx}}" title="Восстановить"><i
+                                        class="fas fa-heart"></i></a>
+                                {{/if}}
+                                {{#if team.missing}}
+                                <a class="find-team-btn control-btn" data-index="{{team.idx}}" title="Найти"><i
+                                        class="fas fa-search"></i></a>
+                                {{/if}}
+                                <a class="delete-team control-btn" data-index="{{team.idx}}"><i class="fas fa-trash"></i></a>
+                                {{/unless}}
+                            </div>
+                        </div>
+                        {{#if team.desc}}<div class="team-desc">{{team.desc}}</div>{{/if}}
+                        <div class="checkbox-row">
+                            {{#unless team.isSilverRavens}}
+                            <label><input type="checkbox" name="teams.{{team.idx}}.disabled" {{checked team.disabled}}>
+                                Недеесп.</label>
+                            <label><input type="checkbox" name="teams.{{team.idx}}.missing" {{checked team.missing}}>
+                                Пропала</label>
+                            {{#if team.blockedByRivalry}}
+                            <label style="color: #d32f2f; font-weight: bold;">
+                                <i class="fas fa-ban"></i> Соперничество
+                            </label>
+                            {{/if}}
+                            {{#if ../hasStrategist}}
+                            <label><input type="checkbox" class="strategist-check" data-index="{{team.idx}}" {{checked
+                                    team.isStrategistTarget}} {{#if ../strategistUsed}}disabled{{/if}}> [Стратег]{{#if ../strategistUsed}} (использован){{/if}}</label>
+                            {{/if}}
+                            {{/unless}}
+                        </div>
+                        {{#unless team.isSilverRavens}}
+                        <input type="hidden" name="teams.{{team.idx}}.type" value="{{team.type}}">
+                        {{/unless}}
+                        <div class="control-row">
+                            <label class="control-label">Командир:</label>
+                            <div class="control-content">
+                                {{#if team.isSilverRavens}}
+                                <span style="color: #666; font-style: italic;">—</span>
+                                {{else}}
+                                <select name="teams.{{team.idx}}.manager" {{#if team.managerLocked}}disabled{{/if}}>
+                                    <option value="">Нет</option>
+                                    {{#each availableManagers as |opt|}}
+                                    <option value="{{opt.id}}" {{#if (eq opt.id ../manager)}}selected{{/if}}>
+                                        {{opt.name}}</option>
+                                    {{/each}}
+                                </select>
+                                {{/if}}
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label class="control-label">Действие:</label>
+                            <div class="control-content">
+                                {{#if team.isSilverRavens}}
+                                <select name="silverRavensAction">
+                                    <option value="">Выберите...</option>
+                                    {{#each team.allActions as |label key|}}<option value="{{key}}" {{#if (eq key
+                                        ../currentAction)}}selected{{/if}}>{{label}}</option>{{/each}}
+                                </select>
+                                {{else}}
+                                <select name="teams.{{team.idx}}.currentAction">
+                                    <option value="">Выберите...</option>
+                                    {{#each team.allActions as |label key|}}<option value="{{key}}" {{#if (eq key
+                                        ../currentAction)}}selected{{/if}}>{{label}}</option>{{/each}}
+                                </select>
+                                {{/if}}
+                            </div>
+                        </div>
+                        <div class="action-row">
+                            <div class="modifiers-box"><strong>Модификаторы:</strong> {{{team.modifiersStr}}}
+                                {{#if team.actionDC}} | <strong>КС:</strong> {{team.actionDC}}{{/if}}</div>
+                            {{#if team.isEffectivelyOperational}}
+                            <button type="button" class="execute-action-btn" data-index="{{team.idx}}"><i
+                                    class="fas fa-dice-d20"></i> Выполнить</button>
+                            {{/if}}
+                        </div>
+                        {{#if team.canUseManticce}}
+                        {{#if team.isEffectivelyOperational}}
+                        <div style="margin-top: 5px; display: flex; justify-content: flex-end;">
+                            <button type="button" class="execute-manticce-bonus-btn" data-index="{{team.idx}}"><i
+                                    class="fas fa-crown"></i> Заработок золота (бонусное)</button>
+                        </div>
+                        {{/if}}
+                        {{else}}
+                        {{#if ../manticceBonusUsedThisWeek}}
+                        <div style="margin-top: 5px; display: flex; justify-content: flex-end;">
+                            <div style="color: #666; font-style: italic; font-size: 0.9em;">
+                                <i class="fas fa-crown" style="opacity: 0.5;"></i> Бонусное действие уже использовано
+                            </div>
+                        </div>
+                        {{/if}}
+                        {{/if}}
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+
+            {{#if uniqueTeams.length}}
+            <div class="unique-teams-divider"></div>
+            <div class="unique-teams-section">
+                <h4 class="unique-teams-header"><i class="fas fa-star"></i> Уникальные команды</h4>
+                <div class="teams-list unique-teams-list" data-team-type="unique">
+                    {{#each uniqueTeams as |team|}}
+                    <div class="team-card team-unique {{#unless team.isOperational}}team-inactive{{/unless}} {{#if team.blockedByRivalry}}team-blocked-rivalry{{/if}}" data-index="{{team.idx}}" draggable="true">
+                        <div class="team-img-container">
+                            <img src="{{team.icon}}" class="team-img">
+                        </div>
+                        <div class="team-details">
+                            <div class="team-header">
+                                <span>{{team.label}} <small class="team-rank">(Ранг {{team.rank}})</small></span>
+                                <div class="team-controls">
+                                    {{#if team.disabled}}
+                                    <a class="recover-team-btn control-btn" data-index="{{team.idx}}" title="Восстановить"><i
+                                            class="fas fa-heart"></i></a>
+                                    {{/if}}
+                                    {{#if team.missing}}
+                                    <a class="find-team-btn control-btn" data-index="{{team.idx}}" title="Найти"><i
+                                            class="fas fa-search"></i></a>
+                                    {{/if}}
+                                    <a class="delete-team control-btn" data-index="{{team.idx}}"><i class="fas fa-trash"></i></a>
+                                </div>
+                            </div>
+                            {{#if team.desc}}<div class="team-desc">{{team.desc}}</div>{{/if}}
+                            <div class="checkbox-row">
+                                <label><input type="checkbox" name="teams.{{team.idx}}.disabled" {{checked team.disabled}}>
+                                    Недеесп.</label>
+                                <label><input type="checkbox" name="teams.{{team.idx}}.missing" {{checked team.missing}}>
+                                    Пропала</label>
+                                {{#if team.blockedByRivalry}}
+                                <label style="color: #d32f2f; font-weight: bold;">
+                                    <i class="fas fa-ban"></i> Соперничество
+                                </label>
+                                {{/if}}
+                                {{#if ../hasStrategist}}
+                                <label><input type="checkbox" class="strategist-check" data-index="{{team.idx}}" {{checked
+                                        team.isStrategistTarget}} {{#if ../strategistUsed}}disabled{{/if}}> [Стратег]{{#if ../strategistUsed}} (использован){{/if}}</label>
+                                {{/if}}
+                            </div>
+                            <input type="hidden" name="teams.{{team.idx}}.type" value="{{team.type}}">
+                            <div class="control-row">
+                                <label class="control-label">Командир:</label>
+                                <div class="control-content">
+                                    <select name="teams.{{team.idx}}.manager" {{#if team.managerLocked}}disabled{{/if}}>
+                                        <option value="">Нет</option>
+                                        {{#each availableManagers as |opt|}}
+                                        <option value="{{opt.id}}" {{#if (eq opt.id ../manager)}}selected{{/if}}>
+                                            {{opt.name}}</option>
+                                        {{/each}}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label class="control-label">Действие:</label>
+                                <div class="control-content">
+                                    <select name="teams.{{team.idx}}.currentAction">
+                                        <option value="">Выберите...</option>
+                                        {{#each team.allActions as |label key|}}<option value="{{key}}" {{#if (eq key
+                                            ../currentAction)}}selected{{/if}}>{{label}}</option>{{/each}}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="action-row">
+                                <div class="modifiers-box"><strong>Модификаторы:</strong> {{{team.modifiersStr}}}
+                                    {{#if team.actionDC}} | <strong>КС:</strong> {{team.actionDC}}{{/if}}</div>
+                                {{#if team.isEffectivelyOperational}}
+                                <button type="button" class="execute-action-btn" data-index="{{team.idx}}"><i
+                                        class="fas fa-dice-d20"></i> Выполнить</button>
+                                {{/if}}
+                            </div>
+                            {{#if team.canUseManticce}}
+                            {{#if team.isEffectivelyOperational}}
+                            <div style="margin-top: 5px; display: flex; justify-content: flex-end;">
+                                <button type="button" class="execute-manticce-bonus-btn" data-index="{{team.idx}}"><i
+                                        class="fas fa-crown"></i> Заработок золота (бонусное)</button>
+                            </div>
+                            {{/if}}
+                            {{else}}
+                            {{#if ../manticceBonusUsedThisWeek}}
+                            <div style="margin-top: 5px; display: flex; justify-content: flex-end;">
+                                <div style="color: #666; font-style: italic; font-size: 0.9em;">
+                                    <i class="fas fa-crown" style="opacity: 0.5;"></i> Бонусное действие уже использовано
+                                </div>
+                            </div>
+                            {{/if}}
+                            {{/if}}
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+            {{/if}}
+        </div>
+
+        <div class="tab" data-tab="allies" data-group="primary">
+            {{#if isGM}}
+            <div class="ally-controls">
+                <button type="button" class="add-ally-btn"><i class="fas fa-plus"></i> Добавить союзника</button>
+                <button type="button" class="ally-settings-btn" title="Автопривязка всех союзников">
+                    <i class="fas fa-link"></i> Автопривязка
+                </button>
+                <span class="ally-count">Активных: {{activeAllyCount}} из {{totalAllyCount}}</span>
+            </div>
+            {{/if}}
+
+            <div class="teams-list">
+                {{#each allies as |ally idx|}}
+                {{#if (or ../isGM ally.enabled)}}
+                <div class="team-card {{#unless ally.enabled}}ally-disabled{{/unless}} {{#if (or ally.captured ally.missing)}}ally-captured{{/if}}">
+                    <div class="team-img-container">
+                        <img src="{{ally.img}}" class="team-img">
+                        {{#if ally.adventure}}
+                        <span class="ally-adventure-badge"
+                            title="Приключение {{ally.adventure}}">{{ally.adventure}}</span>
+                        {{/if}}
+                    </div>
+                    <div class="team-details">
+                        <div class="team-header">
+                            <span>{{ally.name}}</span>
+                            <div class="ally-controls-inline">
+                                {{#if ../isGM}}
+                                {{#if (eq ally.slug "hetamon")}}
+                                <button type="button" class="hetamon-settings-btn control-btn" title="Настройки тайников Хетамона">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                {{/if}}
+                                <label class="ally-toggle"
+                                    title="{{#if ally.enabled}}Отключить союзника{{else}}Включить союзника{{/if}}">
+                                    <input type="checkbox" class="ally-enabled-check" name="allies.{{idx}}.enabled"
+                                        data-index="{{idx}}" {{checked ally.enabled}}>
+                                    <i class="fas {{#if ally.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i>
+                                </label>
+                                <a class="delete-ally control-btn" data-index="{{idx}}" title="Удалить"><i
+                                        class="fas fa-trash"></i></a>
+                                {{/if}}
+                            </div>
+                        </div>
+                        <div class="team-desc">{{ally.description}}</div>
+
+                        {{#if ally.canBeOfficer}}
+                        <div class="ally-officer-badge"><i class="fas fa-star"></i> Может быть офицером</div>
+                        {{/if}}
+                        {{#if (eq ally.slug "manticce")}}
+                        <div class="action-row">
+                            <div class="modifiers-box">
+                                <strong>Любимый ПИ королевы:</strong> 
+                                {{#if ally.favoritePlayer}}
+                                <span style="color: #2e7d32;">👑 {{ally.favoritePlayer}}</span>
+                                {{else}}
+                                <span style="color: #d32f2f;">❌ Не выбран</span>
+                                {{/if}}
+                            </div>
+                            {{#if ../isGM}}
+                            <select name="allies.{{idx}}.favoritePlayer" {{#unless ally.enabled}}disabled{{/unless}} class="manticce-favorite-select">
+                                <option value="">Выберите любимого ПИ</option>
+                                {{#each ../playerCharacters as |pc|}}
+                                <option value="{{pc.name}}" {{#if (eq pc.name ally.favoritePlayer)}}selected{{/if}}>{{pc.name}}</option>
+                                {{/each}}
+                            </select>
+                            {{/if}}
+                        </div>
+                        {{/if}}
+                        {{#if ally.hasState}}
+                        <div class="ally-state-row">
+                            <label><input type="checkbox" name="allies.{{idx}}.revealed" data-index="{{idx}}" {{checked ally.revealed}}>
+                                Прикрытие раскрыто</label>
+                        </div>
+                        {{/if}}
+                        {{#if ally.hasChoice}}
+                        <div class="ally-choice-row">
+                            <label>Бонус +1 к:
+                                <select name="allies.{{idx}}.selectedBonus">
+                                    {{selectOptions ../mialariOptions selected=ally.selectedBonus}}
+                                </select>
+                            </label>
+                        </div>
+                        {{/if}}
+                        {{#if ally.hasMonthlyAction}}
+                        <div class="action-row">
+                            <div class="modifiers-box">
+                                <strong>Месячное действие:</strong> 
+                                {{#if ally.monthlyActionStatus.canUse}}
+                                <span style="color: #2e7d32;">✅ Доступно</span>
+                                {{else}}
+                                <span style="color: #d32f2f;">❌ Недоступно ({{ally.monthlyActionStatus.weeksUntilAvailable}} нед. до следующего использования)</span>
+                                {{/if}}
+                            </div>
+                            {{#if ally.monthlyActionStatus.canUse}}
+                            {{#if (or ../isGM (eq ally.slug "hetamon"))}}
+                            <button type="button" class="execute-monthly-action-btn" data-ally="{{ally.slug}}" data-index="{{idx}}">
+                                <i class="fas fa-box"></i> Создать тайник
+                            </button>
+                            {{/if}}
+                            {{/if}}
+                        </div>
+                        {{/if}}
+                        {{#if ally.enabled}}
+                        <div class="checkbox-row">
+                            <label><input type="checkbox" name="allies.{{idx}}.missing" {{checked ally.missing}}>
+                                Пропал</label>
+                            <label><input type="checkbox" name="allies.{{idx}}.captured" {{checked ally.captured}}>
+                                Схвачен</label>
+                        </div>
+                        {{/if}}
+                    </div>
+                </div>
+                {{/if}}
+                {{/each}}
+
+                {{#unless hasVisibleAllies}}
+                <div style="text-align:center; color:#777; margin-top:20px;">
+                    {{#if isGM}}
+                    Нет добавленных союзников. Нажмите "Добавить союзника" для начала.
+                    {{else}}
+                    Союзники ещё не завербованы.
+                    {{/if}}
+                </div>
+                {{/unless}}
+            </div>
+        </div>
+
+        <div class="tab" data-tab="caches" data-group="primary">
+            {{#if isGM}}
+            <div class="cache-controls">
+                <button type="button" class="add-cache-btn"><i class="fas fa-plus"></i> Создать тайник</button>
+                <button type="button" class="cache-limits-settings-btn" title="Настройки лимитов тайников">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+            {{/if}}
+
+            <div class="teams-list">
+                {{#each data.caches as |cache idx|}}
+                {{#unless (eq cache.type "safehouse")}}
+                <div class="team-card cache-card">
+                    <div class="team-img-container">
+                        <i class="fas fa-box cache-icon {{cache.size}}-cache cache-type"></i>
+                        {{#if cache.active}}
+                        <span class="cache-status-badge active" title="Активный">✓</span>
+                        {{else}}
+                        <span class="cache-status-badge inactive" title="Неактивный">✗</span>
+                        {{/if}}
+                    </div>
+                    <div class="team-details">
+                        <div class="team-header">
+                            <span>{{#if (eq cache.type "safehouse")}}{{#if (eq cache.size "small")}}Малое убежище{{else}}{{#if (eq cache.size "medium")}}Среднее убежище{{else}}Большое убежище{{/if}}{{/if}}{{else}}{{#if (eq cache.size "small")}}Малый тайник{{else}}{{#if (eq cache.size "medium")}}Средний тайник{{else}}Большой тайник{{/if}}{{/if}}{{/if}}</span>
+                            <div class="cache-controls-inline">
+                                {{#if ../isGM}}
+                                <label class="cache-toggle" title="{{#if cache.active}}Деактивировать тайник{{else}}Активировать тайник{{/if}}">
+                                    <input type="checkbox" class="cache-active-check" name="caches.{{idx}}.active" data-index="{{idx}}" {{checked cache.active}}>
+                                    <i class="fas {{#if cache.active}}fa-eye{{else}}fa-eye-slash{{/if}}"></i>
+                                </label>
+                                <a class="delete-cache control-btn" data-index="{{idx}}" title="Удалить"><i class="fas fa-trash"></i></a>
+                                {{/if}}
+                            </div>
+                        </div>
+                        
+                        {{#if ../isGM}}
+                        <!-- GM Edit Mode -->
+                        <div class="cache-edit-mode">
+                            <div class="control-row">
+                                <label class="control-label">Размер:</label>
+                                <div class="control-content">
+                                    <select name="caches.{{idx}}.size" class="cache-input">
+                                        <option value="small" {{#if (eq cache.size "small")}}selected{{/if}}>Малый</option>
+                                        <option value="medium" {{#if (eq cache.size "medium")}}selected{{/if}}>Средний</option>
+                                        <option value="large" {{#if (eq cache.size "large")}}selected{{/if}}>Большой</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label class="control-label">Местоположение:</label>
+                                <div class="control-content">
+                                    <input type="text" name="caches.{{idx}}.location" value="{{cache.location}}" class="cache-input">
+                                </div>
+                            </div>
+                            <div class="control-row">
+                                <label class="control-label">Стоимость (зм):</label>
+                                <div class="control-content">
+                                    <input type="number" name="caches.{{idx}}.value" value="{{cache.value}}" min="0" class="cache-input">
+                                </div>
+                            </div>
+                            <div class="cache-details">
+                                <span><strong>КС обнаружения:</strong> {{#if (eq cache.size "small")}}15{{else}}{{#if (eq cache.size "medium")}}20{{else}}30{{/if}}{{/if}}</span>
+                                {{#if cache.created}}<span><strong>Создан:</strong> Неделя {{cache.created}}</span>{{/if}}
+                            </div>
+                        </div>
+                        {{else}}
+                        <!-- Player View Mode -->
+                        <div class="cache-info">
+                            <div class="cache-location">
+                                <strong>Местоположение:</strong> {{cache.location}}
+                            </div>
+                            <div class="cache-details">
+                                <span><strong>Стоимость:</strong> {{cache.value}} зм</span>
+                                <span><strong>КС обнаружения:</strong> {{#if (eq cache.size "small")}}15{{else}}{{#if (eq cache.size "medium")}}20{{else}}30{{/if}}{{/if}}</span>
+                            </div>
+                        </div>
+                        {{/if}}
+                    </div>
+                </div>
+                {{/unless}}
+                {{/each}}
+
+                {{#unless data.caches.length}}
+                <div style="text-align:center; color:#777; margin-top:20px;">
+                    {{#if isGM}}
+                    Нет созданных тайников. Нажмите "Создать тайник" для начала.
+                    {{else}}
+                    Тайники ещё не созданы.
+                    {{/if}}
+                </div>
+                {{/unless}}
+            </div>
+        </div>
+
+        <div class="tab" data-tab="progression" data-group="primary">
+            <h3 class="cinzel">Таблица Развития Восстания</h3>
+            <table class="progression-table">
+                <thead>
+                    <tr>
+                        <th>Ранг</th>
+                        <th>Стор.</th>
+                        <th>Приор.</th>
+                        <th>Втор.</th>
+                        <th>Дейст.</th>
+                        <th>Ком.</th>
+                        <th>Дар ПИ</th>
+                        {{#if isGM}}<th>Настройки</th>{{/if}}
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each progression as |p|}}
+                    <tr class="{{#if p.isCurrent}}current-rank{{/if}} {{#if p.isAchieved}}achieved{{/if}}">
+                        <td><strong>{{p.rank}}</strong></td>
+                        <td>{{p.minSupporters}}</td>
+                        <td>+{{p.focusBonus}}</td>
+                        <td>+{{p.secondaryBonus}}</td>
+                        <td>{{p.actions}}</td>
+                        <td>{{p.maxTeams}}</td>
+                        <td>{{#if p.gift}}{{#if p.isCustomGift}}<span style="color: #194680; font-weight: bold;">✏️</span> {{/if}}{{p.gift}}{{else}}—{{/if}}{{#if p.title}} <em>(Титул: {{p.title}})</em>{{/if}}
+                        </td>
+                        {{#if ../isGM}}
+                        <td>
+                            <button type="button" class="edit-gift-btn" data-rank="{{p.rank}}" title="Редактировать дар ПИ">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </td>
+                        {{/if}}
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="tab" data-tab="effects" data-group="primary">
+            <div class="effects-header" style="margin-bottom: 10px;">
+                {{#if isGM}}
+                <button type="button" class="add-custom-effect-btn"><i class="fas fa-plus"></i> Добавить модификатор</button>
+                {{/if}}
+            </div>
+            <div class="teams-list">
+                {{#each data.events as |eff idx|}}
+                <div class="team-card" style="align-items:center; flex-wrap:wrap;">
+                    <div style="display:flex; width:100%; align-items:center; margin-bottom:5px;">
+                        <input type="text" name="events.{{idx}}.name" value="{{eff.name}}" placeholder="Название"
+                            style="font-weight:bold; width:30%; border:none; border-bottom:1px solid #ccc;">
+                        <input type="text" name="events.{{idx}}.desc" value="{{eff.desc}}" placeholder="Описание"
+                            style="flex:1; margin:0 5px; border:none; border-bottom:1px solid #ccc;">
+                        {{#if ../isGM}}
+                        <a class="delete-effect control-btn" data-index="{{idx}}"><i class="fas fa-trash"></i></a>
+                        {{/if}}
+                    </div>
+                    <div style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="font-size:11px; color:#666;">
+                            {{#if eff.isPersistent}}<span style="color:#194680;">Постоянное</span>{{/if}}
+                            {{#if eff.weekStarted}}<span>Неделя: {{eff.weekStarted}}</span>{{/if}}
+                            {{#if eff.duration}}<span>Длительность: {{eff.duration}}</span>{{/if}}
+                            {{#if eff.isCustomModifier}}
+                            <span style="color:#9c27b0; font-weight:bold;">
+                                <i class="fas fa-sliders-h"></i> Модификатор: {{#if (gte eff.modifierValue 0)}}+{{/if}}{{eff.modifierValue}}
+                                ({{#each eff.affectedChecks}}{{#if @index}}, {{/if}}{{#if (eq this "loyalty")}}Верность{{/if}}{{#if (eq this "security")}}Безопасность{{/if}}{{#if (eq this "secrecy")}}Секретность{{/if}}{{/each}})
+                            </span>
+                            {{/if}}
+                        </div>
+                        {{#if (eq eff.name "Предатель в тюрьме")}}
+                        <div style="text-align:right;">
+                            <button type="button" class="traitor-persuade-btn" 
+                                data-event-index="{{@index}}" data-team-type="{{eff.traitorTeam}}"
+                                style="font-size:10px; padding:2px 8px; width:auto; background: #4caf50; color: white; margin: 1px;">
+                                ✨ Переубедить
+                            </button>
+                            <button type="button" class="traitor-execute-from-prison-btn" 
+                                data-event-index="{{@index}}" data-team-type="{{eff.traitorTeam}}"
+                                style="font-size:10px; padding:2px 8px; width:auto; background: #f44336; color: white; margin: 1px;">
+                                ⚔️ Казнить
+                            </button>
+                            <button type="button" class="traitor-exile-from-prison-btn" 
+                                data-event-index="{{@index}}" data-team-type="{{eff.traitorTeam}}"
+                                style="font-size:10px; padding:2px 8px; width:auto; background: #ff9800; color: white; margin: 1px;">
+                                🚪 Изгнать
+                            </button>
+                        </div>
+                        {{else}}
+                        {{#if (eq eff.name "Недееспособная команда")}}
+                        <div style="text-align:right;">
+                            <button type="button" class="restore-disabled-team-btn"
+                                style="font-size:10px; padding:2px 8px; width:auto;">
+                                <i class="fas fa-coins"></i> Восстановить
+                            </button>
+                        </div>
+                        {{else}}
+                        {{#if eff.mitigate}}
+                        <div style="text-align:right;">
+                            {{#if (eq eff.name "Инквизиция")}}
+                            <button type="button" class="show-inquisition-info-btn"
+                                style="font-size:10px; padding:2px 8px; width:auto;">
+                                <i class="fas fa-info-circle"></i> Информация
+                            </button>
+                            {{else}}
+                            <button type="button" class="roll-mitigate-btn" data-mitigate="{{eff.mitigate}}"
+                                data-dc="{{eff.dc}}" data-name="{{eff.name}}"
+                                style="font-size:10px; padding:2px 8px; width:auto;">
+                                <i class="fas fa-shield-alt"></i> Смягчить
+                            </button>
+                            {{/if}}
+                            <span style="font-size:10px; margin-left:5px; color:#666;">
+                                {{#if (lookup ../CHECK_LABELS eff.mitigate)}}
+                                {{lookup ../CHECK_LABELS eff.mitigate}}
+                                {{else}}
+                                {{#if (lookup ../PF2E_SKILL_LABELS eff.mitigate)}}
+                                {{lookup ../PF2E_SKILL_LABELS eff.mitigate}}
+                                {{else}}
+                                {{eff.mitigate}}
+                                {{/if}}
+                                {{/if}}
+                                {{#if isGM}} (КС {{eff.dc}}){{/if}}
+                            </span>
+                        </div>
+                        {{/if}}
+                        {{/if}}
+                        {{/if}}
+                    </div>
+                </div>
+                {{/each}}
+                {{#unless data.events}}<div style="text-align:center; color:#777; margin-top:20px;">Нет активных
+                    эффектов.</div>{{/unless}}
+            </div>
+        </div>
+    </section>
+</form>

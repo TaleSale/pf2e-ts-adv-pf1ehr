@@ -227,11 +227,11 @@ function guardChatButtonClick(ev) {
 }
 
 function isPrimaryAutomationClient(message = null) {
-    const activeGM = game.users.find(user => user.isGM && user.active);
-    if (activeGM) return activeGM.id === game.user.id;
-
     const messageUserId = message?.user?.id ?? message?.author?.id ?? null;
     if (messageUserId) return messageUserId === game.user.id;
+
+    const activeGM = game.users.find(user => user.isGM && user.active);
+    if (activeGM) return activeGM.id === game.user.id;
 
     return true;
 }
