@@ -39,6 +39,32 @@ function getPreferredRollActor() {
     return game.user?.character ?? null;
 }
 
+async function getActorTokenAppearance(actor, fallback = null) {
+    if (!actor) return fallback;
+
+    try {
+        const tokenDocument = await actor.getTokenDocument();
+        const tokenSrc = tokenDocument?.texture?.src || tokenDocument?._source?.texture?.src;
+        if (tokenSrc) return tokenSrc;
+    } catch (err) {
+        console.warn(`${MODULE_ID} | Failed to resolve token document for actor ${actor?.name ?? "unknown"}`, err);
+    }
+
+    if (actor.prototypeToken?.randomImg && typeof actor.getTokenImages === "function") {
+        try {
+            const tokenImages = await actor.getTokenImages();
+            if (Array.isArray(tokenImages) && tokenImages.length > 0) return tokenImages[0];
+        } catch (err) {
+            console.warn(`${MODULE_ID} | Failed to resolve wildcard token images for actor ${actor?.name ?? "unknown"}`, err);
+        }
+    }
+
+    const prototypeSrc = actor.prototypeToken?.texture?.src;
+    if (prototypeSrc) return prototypeSrc;
+
+    return fallback;
+}
+
 function hasActiveStrategistOfficer(data) {
     if (!Array.isArray(data?.officers)) return false;
     return data.officers.some((officer) =>
@@ -494,7 +520,7 @@ export class RebellionSheet extends FormApplication {
         const uniqueTeams = teams.filter(t => t.isUnique);
 
         // Process allies with full data from definitions
-        const allies = (data.allies || []).map((a, idx) => {
+        const allies = await Promise.all((data.allies || []).map(async (a, idx) => {
             const def = getAllyData(a.slug);
             if (!def) return { ...a, idx, name: a.name || 'Неизвестный', img: 'icons/svg/mystery-man.svg', description: '', enabled: false };
 
@@ -503,13 +529,13 @@ export class RebellionSheet extends FormApplication {
 
             // Get actor info if bound
             let actorName = null;
-            let finalImg = a.img || def.img;
+            const hasCustomImage = a.img && a.img !== 'icons/svg/mystery-man.svg';
+            let finalImg = hasCustomImage ? a.img : def.img;
             if (a.actorId) {
                 const actor = game.actors.get(a.actorId);
                 if (actor) {
                     actorName = actor.name;
-                    // Use token image if available, otherwise use actor image, fallback to original
-                    finalImg = actor.prototypeToken?.texture?.src || actor.img || finalImg;
+                    finalImg = await getActorTokenAppearance(actor, finalImg);
                 }
             }
 
@@ -528,7 +554,7 @@ export class RebellionSheet extends FormApplication {
                 monthlyActionStatus: monthlyStatus,
                 actorName: actorName
             };
-        });
+        }));
 
         // Count active and total allies
         const activeAllyCount = allies.filter(a => a.enabled && !a.missing && !a.captured).length;
@@ -8710,10 +8736,11 @@ export class RebellionSheet extends FormApplication {
             } else if (matchingActors.length === 1) {
                 // Найден один персонаж - автоматически привязываем
                 const actor = matchingActors[0];
+                const tokenImg = await getActorTokenAppearance(actor, ally.img);
                 allies[i] = {
                     ...ally,
                     actorId: actor.id,
-                    img: actor.prototypeToken?.texture?.src || actor.img || ally.img
+                    img: tokenImg
                 };
                 updatedCount++;
             } else {
@@ -8779,11 +8806,11 @@ export class RebellionSheet extends FormApplication {
                         }
                     },
                     render: (html) => {
-                        const updatePreview = () => {
+                        const updatePreview = async () => {
                             const index = parseInt(html.find('#actor-select').val());
                             const actor = actors[index];
                             if (actor) {
-                                const tokenImg = actor.prototypeToken?.texture?.src || actor.img;
+                                const tokenImg = await getActorTokenAppearance(actor, ally.img);
                                 html.find('#actor-preview').html(`
                                     <div style="display: flex; gap: 10px; align-items: center;">
                                         <img src="${tokenImg}" style="width: 48px; height: 48px; border-radius: 5px; object-fit: cover;">
@@ -8797,17 +8824,18 @@ export class RebellionSheet extends FormApplication {
                             }
                         };
                         html.find('#actor-select').on('change', updatePreview);
-                        updatePreview();
+                        void updatePreview();
                     }
                 }).render(true);
             });
 
             if (selectedIndex >= 0) {
                 const selectedActor = actors[selectedIndex];
+                const tokenImg = await getActorTokenAppearance(selectedActor, ally.img);
                 allies[allyIndex] = {
                     ...ally,
                     actorId: selectedActor.id,
-                    img: selectedActor.prototypeToken?.texture?.src || selectedActor.img || ally.img
+                    img: tokenImg
                 };
             }
         }
@@ -8861,11 +8889,12 @@ export class RebellionSheet extends FormApplication {
 
                         const actor = game.actors.get(actorId);
                         if (!actor) return;
+                        const tokenImg = await getActorTokenAppearance(actor, ally.img);
 
                         allies[idx] = {
                             ...ally,
                             actorId: actor.id,
-                            img: actor.prototypeToken?.texture?.src || actor.img || ally.img
+                            img: tokenImg
                         };
 
                         await DataHandler.update({ allies });
@@ -8875,11 +8904,11 @@ export class RebellionSheet extends FormApplication {
                 cancel: { label: "Отмена" }
             },
             render: (html) => {
-                const updatePreview = () => {
+                const updatePreview = async () => {
                     const actorId = html.find('#actor-select').val();
                     const actor = game.actors.get(actorId);
                     if (actor) {
-                        const tokenImg = actor.prototypeToken?.texture?.src || actor.img;
+                        const tokenImg = await getActorTokenAppearance(actor, ally.img);
                         html.find('#actor-preview').html(`
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <img src="${tokenImg}" style="width: 48px; height: 48px; border-radius: 5px; object-fit: cover;">
@@ -8895,6 +8924,7 @@ export class RebellionSheet extends FormApplication {
                     }
                 };
                 html.find('#actor-select').on('change', updatePreview);
+                void updatePreview();
             }
         }).render(true);
     }
@@ -9055,11 +9085,11 @@ export class RebellionSheet extends FormApplication {
                 maxUses: 3
             },
             medium: {
-                value: 120,
+                value: 75,
                 maxUses: 2
             },
             large: {
-                value: 600,
+                value: 150,
                 maxUses: 1
             }
         };
@@ -9670,11 +9700,11 @@ export class RebellionSheet extends FormApplication {
                 maxUses: 3
             },
             medium: {
-                value: 120,
+                value: 75,
                 maxUses: 2
             },
             large: {
-                value: 600,
+                value: 150,
                 maxUses: 1
             }
         };

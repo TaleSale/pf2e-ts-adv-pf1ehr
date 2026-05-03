@@ -230,7 +230,7 @@ export const ALLY_DEFINITIONS = {
     // === ADVENTURE 2: TURN OF THE TORRENT ===
     cassius: {
         name: "Капитан Кассий Саргаэта",
-        img: "icons/svg/mystery-man.svg",
+        img: "modules/pf2e-ts-adv-pf1ehr/allbooks/allies/Cassius_Sargaetatr.webp",
         description: "Обеспечивает иммунитет к событию 'Усиленные Патрули'. При выпадении этого события вместо штрафов восстание получает +3d6 сторонников.",
         desc: "Иммунитет к 'Усиленным Патрулям' (+3d6 сторонников).",
         canBeOfficer: false,
@@ -242,7 +242,7 @@ export const ALLY_DEFINITIONS = {
     },
     octavio: {
         name: "Ликтор Октавио Сабинус",
-        img: "icons/svg/mystery-man.svg",
+        img: "modules/pf2e-ts-adv-pf1ehr/allbooks/allies/Octaviotr.webp",
         description: "+4 к проверкам Безопасности для действия Спасение персонажа. Обеспечивает иммунитет к событию 'Низкий боевой дух'.",
         desc: "+4 Безопасность (Спасение). Иммунитет к 'Низкой Морали'.",
         canBeOfficer: false,
@@ -255,7 +255,7 @@ export const ALLY_DEFINITIONS = {
     },
     hetamon: {
         name: "Хетамон Хаас",
-        img: "icons/svg/mystery-man.svg",
+        img: "modules/pf2e-ts-adv-pf1ehr/allbooks/allies/Hetamon_Haacetr.webp",
         description: "Снижает Известность на 1d6 в начале Фазы Содержания. Иммунитет к событию 'Болезнь'. Один раз в месяц может бесплатно создать тайник с припасами.",
         desc: "-1d6 Известность (Содержание). Иммунитет к 'Болезни'.",
         canBeOfficer: false,
@@ -370,7 +370,7 @@ export const ALLY_DEFINITIONS = {
     },
     shensen: {
         name: "Шенсен",
-        img: "icons/svg/mystery-man.svg",
+        img: "modules/pf2e-ts-adv-pf1ehr/allbooks/allies/Shensentr.webp",
         description: "Советы Шенсен позволяют Серебряным Воронам перебрасывать одну проверку Верности в неделю.",
         desc: "Переброс 1 Верности в неделю.",
         canBeOfficer: true,
@@ -720,3 +720,46 @@ export const TEAMS = {
         icon: "icons/svg/mystery-man.svg", caps: []
     }
 };
+const MODULE_IMAGE_ROOT = "modules/pf2e-ts-adv-pf1ehr/allbooks";
+
+const DEFAULT_ALLY_IMAGES = {
+    laria: `${MODULE_IMAGE_ROOT}/allies/lariatr.webp`,
+    rexus: `${MODULE_IMAGE_ROOT}/allies/rexustr.webp`,
+    vendalfek: `${MODULE_IMAGE_ROOT}/allies/Vendalfektr.webp`,
+    blosodriette: `${MODULE_IMAGE_ROOT}/allies/Blosodriettetr.webp`,
+    cassius: `${MODULE_IMAGE_ROOT}/allies/Cassius_Sargaetatr.webp`,
+    octavio: `${MODULE_IMAGE_ROOT}/allies/Octaviotr.webp`,
+    hetamon: `${MODULE_IMAGE_ROOT}/allies/Hetamon_Haacetr.webp`,
+    jackdaw: `${MODULE_IMAGE_ROOT}/allies/Jackdawtr.webp`,
+    shensen: `${MODULE_IMAGE_ROOT}/allies/Shensentr.webp`
+};
+
+const DEFAULT_TEAM_IMAGES = {
+    streetPerformers: `${MODULE_IMAGE_ROOT}/teams/teams_PERFORMERStr.webp`,
+    rumormongers: `${MODULE_IMAGE_ROOT}/teams/teams_RUMORMONGERStr.webp`,
+    agitators: `${MODULE_IMAGE_ROOT}/teams/teams_AGITATORStr.webp`,
+    cognoscenti: `${MODULE_IMAGE_ROOT}/teams/teams_COGNOSCENTItr.webp`,
+    sneaks: `${MODULE_IMAGE_ROOT}/teams/Teams_SNEAKStr.webp`,
+    thieves: `${MODULE_IMAGE_ROOT}/teams/teams_THIEVEStr.webp`,
+    saboteurs: `${MODULE_IMAGE_ROOT}/teams/teams_SABOTEURStr.webp`,
+    smugglers: `${MODULE_IMAGE_ROOT}/teams/teams_SMUGGLERStr.webp`,
+    freedomFighters: `${MODULE_IMAGE_ROOT}/teams/teams_FREEDOMtr.webp`,
+    infiltrators: `${MODULE_IMAGE_ROOT}/teams/teams_INFILTRATORStr.webp`,
+    cabalists: `${MODULE_IMAGE_ROOT}/teams/teams_CABALISTStr.webp`,
+    spellcasters: `${MODULE_IMAGE_ROOT}/teams/teams_SPELLCASTERStr.webp`,
+    peddlers: `${MODULE_IMAGE_ROOT}/teams/teams_PEDDLERStr.webp`,
+    merchants: `${MODULE_IMAGE_ROOT}/teams/teams_MERCHANTStr.webp`,
+    blackMarketers: `${MODULE_IMAGE_ROOT}/teams/teams_BLACKtr.webp`,
+    merchantLords: `${MODULE_IMAGE_ROOT}/teams/teams_LORDStr.webp`,
+    fushiSisters: `${MODULE_IMAGE_ROOT}/teams/fushisisters_troopstr.webp`,
+    torrentArmigers: `${MODULE_IMAGE_ROOT}/teams/armiger_trooptr.webp`,
+    acisaziScouts: `${MODULE_IMAGE_ROOT}/teams/Acisazi_Scout_trooptr.webp`
+};
+
+for (const [slug, img] of Object.entries(DEFAULT_ALLY_IMAGES)) {
+    if (ALLY_DEFINITIONS[slug]) ALLY_DEFINITIONS[slug].img = img;
+}
+
+for (const [slug, icon] of Object.entries(DEFAULT_TEAM_IMAGES)) {
+    if (TEAMS[slug]) TEAMS[slug].icon = icon;
+}
