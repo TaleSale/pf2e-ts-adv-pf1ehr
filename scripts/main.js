@@ -217,13 +217,53 @@ function getPreferredRollActor() {
 }
 
 function guardChatButtonClick(ev) {
-    const button = ev.currentTarget;
+    const button = ev.currentTarget ?? ev.delegateTarget ?? null;
     if (button?.dataset?.rebellionClickHandled === "true") return false;
     if (button?.dataset) button.dataset.rebellionClickHandled = "true";
     ev.preventDefault();
     ev.stopPropagation();
     if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
     return true;
+}
+
+function delegateClickEvent(event, selector) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    for (const node of path) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches(selector)) return node;
+    }
+
+    const target = event.target instanceof Element ? event.target : null;
+    return target?.closest?.(selector) ?? null;
+}
+
+function onDocumentClick(selector, handler) {
+    document.addEventListener("click", (event) => {
+        const matched = delegateClickEvent(event, selector);
+        if (!matched) return;
+
+        const delegatedEvent = {
+            originalEvent: event,
+            target: event.target,
+            currentTarget: matched,
+            delegateTarget: matched,
+            composedPath: () => (typeof event.composedPath === "function" ? event.composedPath() : []),
+            preventDefault: () => event.preventDefault(),
+            stopPropagation: () => event.stopPropagation(),
+            stopImmediatePropagation: () => event.stopImmediatePropagation()
+        };
+        handler(delegatedEvent);
+    });
+}
+
+function getRollChatMessageMode() {
+    if (CONST?.CHAT_MESSAGE_STYLES?.ROLL !== undefined) {
+        return { style: CONST.CHAT_MESSAGE_STYLES.ROLL };
+    }
+    if (CONST?.CHAT_MESSAGE_TYPES?.ROLL !== undefined) {
+        return { type: CONST.CHAT_MESSAGE_TYPES.ROLL };
+    }
+    return {};
 }
 
 function isPrimaryAutomationClient(message = null) {
@@ -372,7 +412,7 @@ Hooks.once("ready", () => {
             roll: roll,
             content: await roll.render(),
             sound: CONFIG.sounds.dice,
-            type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+            ...getRollChatMessageMode(),
             speaker: ChatMessage.getSpeaker()
         };
         if (chatFlags) rollMsgData.flags = chatFlags;
@@ -517,7 +557,7 @@ Hooks.once("ready", () => {
     }
 
     // Global listener for @Rebellion chat buttons
-    $(document).on('click', '.rebellion-chat-btn', async (ev) => {
+    onDocumentClick('.rebellion-chat-btn', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
@@ -543,7 +583,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for roll buttons from chat
-    $(document).on('click', '.rebellion-roll-from-chat', async (ev) => {
+    onDocumentClick('.rebellion-roll-from-chat', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
@@ -560,7 +600,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for @Rebellion inline check buttons
-    $(document).on('click', '.rebellion-inline-check', async (ev) => {
+    onDocumentClick('.rebellion-inline-check', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
@@ -594,7 +634,7 @@ Hooks.once("ready", () => {
     }
 
     // Global listener for @Rebellion[%] inline check buttons
-    $(document).on('click', '.rebellion-percent-check', async (ev) => {
+    onDocumentClick('.rebellion-percent-check', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
@@ -606,7 +646,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for @Rebellion[%] chat buttons
-    $(document).on('click', '.rebellion-percent-chat-btn', async (ev) => {
+    onDocumentClick('.rebellion-percent-chat-btn', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
@@ -636,7 +676,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for percent roll buttons from chat
-    $(document).on('click', '.rebellion-percent-roll-from-chat', async (ev) => {
+    onDocumentClick('.rebellion-percent-roll-from-chat', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
@@ -653,7 +693,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for @Rebellion dice roll buttons
-    $(document).on('click', '.rebellion-dice-roll', async (ev) => {
+    onDocumentClick('.rebellion-dice-roll', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
@@ -673,7 +713,7 @@ Hooks.once("ready", () => {
             roll: roll,
             content: await roll.render(),
             sound: CONFIG.sounds.dice,
-            type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+            ...getRollChatMessageMode(),
             speaker: ChatMessage.getSpeaker()
         });
 
@@ -687,7 +727,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for @Rebellion dice chat buttons
-    $(document).on('click', '.rebellion-dice-chat-btn', async (ev) => {
+    onDocumentClick('.rebellion-dice-chat-btn', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const target = ev.currentTarget;
@@ -715,7 +755,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for dice roll buttons from chat
-    $(document).on('click', '.rebellion-dice-roll-from-chat', async (ev) => {
+    onDocumentClick('.rebellion-dice-roll-from-chat', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
@@ -735,7 +775,7 @@ Hooks.once("ready", () => {
             roll: roll,
             content: await roll.render(),
             sound: CONFIG.sounds.dice,
-            type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+            ...getRollChatMessageMode(),
             speaker: ChatMessage.getSpeaker()
         });
 
@@ -754,7 +794,7 @@ Hooks.once("ready", () => {
     });
 
     // Global listener for stat adjustment buttons
-    $(document).on('click', '.rebellion-adjust-stat', async (ev) => {
+    onDocumentClick('.rebellion-adjust-stat', async (ev) => {
         if (!guardChatButtonClick(ev)) return;
 
         const button = ev.currentTarget;
@@ -886,7 +926,7 @@ Hooks.once("ready", () => {
     };
 
     for (const [selector, method] of Object.entries(BUTTON_ACTIONS)) {
-        $(document).on('click', selector, (ev) => {
+        onDocumentClick(selector, (ev) => {
             if (!guardChatButtonClick(ev)) return;
             const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
             sheet[method](ev);
@@ -2620,7 +2660,7 @@ Hooks.once("ready", () => {
     });
 
     // Handle reroll button clicks
-    $(document).on('click', '.rebellion-reroll-btn', async (ev) => {
+    onDocumentClick('.rebellion-reroll-btn', async (ev) => {
         ev.preventDefault();
 
         const messageId = $(ev.currentTarget).data('message-id');
@@ -2961,14 +3001,14 @@ Hooks.on('createChatMessage', async (message) => {
 
 });
 // Обработчики для события "Дьявольское проникновение"
-$(document).on('click', '.roll-devil-weeks-btn', (ev) => {
+onDocumentClick('.roll-devil-weeks-btn', (ev) => {
     console.log("=== DEVIL WEEKS BUTTON CLICKED (main.js) ===");
     if (!guardChatButtonClick(ev)) return;
     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
     sheet._onDevilWeeksRoll(ev);
 });
 
-$(document).on('click', '.roll-devil-perception-btn', (ev) => {
+onDocumentClick('.roll-devil-perception-btn', (ev) => {
     console.log("=== DEVIL PERCEPTION BUTTON CLICKED (main.js) ===");
     if (!guardChatButtonClick(ev)) return;
     const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
@@ -2976,7 +3016,7 @@ $(document).on('click', '.roll-devil-perception-btn', (ev) => {
 });
 
 // Обработчик для кнопки информации об Инквизиции
-$(document).on('click', '.show-inquisition-info-btn', (ev) => {
+onDocumentClick('.show-inquisition-info-btn', (ev) => {
     ev.preventDefault();
     const message = `
             <h3>🛡️ Как завершить постоянную Инквизицию</h3>
