@@ -163,6 +163,7 @@ export function defaultRebellionData() {
         actionsUsedThisWeek: 0,
         strategistUsed: false,
         recruitedThisPhase: false,
+        recruitSupportersUsesThisPhase: 0,
         silverRavensAction: "",
         tempBonuses: { loyalty: 0, security: 0, secrecy: 0 },
         activeEvents: [],

@@ -481,6 +481,7 @@
             {{#if isGM}}
             <div class="ally-controls">
                 <button type="button" class="add-ally-btn"><i class="fas fa-plus"></i> Добавить союзника</button>
+                <button type="button" class="add-coin-court-ally-btn"><i class="fas fa-coins"></i> Добавить дом Двора Монет</button>
                 <button type="button" class="ally-settings-btn" title="Автопривязка всех союзников">
                     <i class="fas fa-link"></i> Автопривязка
                 </button>
@@ -488,8 +489,97 @@
             </div>
             {{/if}}
 
+            {{#if courtOfCoinsAllies.length}}
+            <div class="unique-teams-section" style="margin-bottom: 15px;">
+                <h4 class="unique-teams-header"><i class="fas fa-coins"></i> Двор Монет</h4>
+                <div class="teams-list">
+                    {{#each courtOfCoinsAllies as |ally|}}
+                    {{#if (or ../isGM ally.enabled)}}
+                    <div class="team-card {{#unless ally.enabled}}ally-disabled{{/unless}} {{#if (or ally.captured ally.missing)}}ally-captured{{/if}}">
+                        <div class="team-img-container">
+                            <img src="{{ally.img}}" class="team-img">
+                        </div>
+                        <div class="team-details">
+                            <div class="team-header">
+                                <span>{{ally.name}}</span>
+                                <div class="ally-controls-inline">
+                                    {{#if ../isGM}}
+                                    {{#if (eq ally.slug "vashnarstill")}}
+                                    <button type="button" class="hetamon-settings-btn control-btn" title="Настройки тайников">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    {{/if}}
+                                    <label class="ally-toggle"
+                                        title="{{#if ally.enabled}}Отключить союзника{{else}}Включить союзника{{/if}}">
+                                        <input type="checkbox" class="ally-enabled-check" name="allies.{{ally.idx}}.enabled"
+                                            data-index="{{ally.idx}}" {{checked ally.enabled}}>
+                                        <i class="fas {{#if ally.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i>
+                                    </label>
+                                    <a class="delete-ally control-btn" data-index="{{ally.idx}}" title="Удалить"><i
+                                            class="fas fa-trash"></i></a>
+                                    {{/if}}
+                                </div>
+                            </div>
+                            <div class="team-desc">{{ally.description}}</div>
+                            {{#if ally.hasWeeklyAction}}
+                            <div class="action-row">
+                                <div class="modifiers-box">
+                                    <strong>Еженедельное действие:</strong>
+                                    {{#if ally.weeklyActionStatus.canUse}}
+                                    <span style="color: #2e7d32;">✅ Доступно</span>
+                                    {{else}}
+                                    <span style="color: #d32f2f;">❌ Уже использовано на этой неделе</span>
+                                    {{/if}}
+                                </div>
+                                {{#if ally.weeklyActionStatus.canUse}}
+                                {{#if ../isGM}}
+                                <button type="button" class="execute-weekly-ally-action-btn" data-ally="{{ally.slug}}" data-index="{{ally.idx}}">
+                                    <i class="fas fa-shield-alt"></i> Снизить опасность
+                                </button>
+                                {{/if}}
+                                {{/if}}
+                            </div>
+                            {{/if}}
+                            {{#if ally.hasMonthlyAction}}
+                            <div class="action-row">
+                                <div class="modifiers-box">
+                                    <strong>Месячное действие:</strong>
+                                    {{#if ally.monthlyActionStatus.canUse}}
+                                    <span style="color: #2e7d32;">✅ Доступно</span>
+                                    {{else}}
+                                    <span style="color: #d32f2f;">❌ Недоступно{{#if ally.monthlyActionStatus.weeksUntilAvailable}} ({{ally.monthlyActionStatus.weeksUntilAvailable}} нед.){{/if}}</span>
+                                    {{/if}}
+                                    {{#if ally.monthlyActionStatus.label}}
+                                    <div style="margin-top: 3px;">{{ally.monthlyActionStatus.label}}</div>
+                                    {{/if}}
+                                </div>
+                                {{#if ally.monthlyActionStatus.canUse}}
+                                {{#if ../isGM}}
+                                <button type="button" class="execute-monthly-action-btn" data-ally="{{ally.slug}}" data-index="{{ally.idx}}">
+                                    <i class="fas fa-box"></i> Создать тайник
+                                </button>
+                                {{/if}}
+                                {{/if}}
+                            </div>
+                            {{/if}}
+                            {{#if ally.enabled}}
+                            <div class="checkbox-row">
+                                <label><input type="checkbox" name="allies.{{ally.idx}}.missing" {{checked ally.missing}}>
+                                    Пропал</label>
+                                <label><input type="checkbox" name="allies.{{ally.idx}}.captured" {{checked ally.captured}}>
+                                    Схвачен</label>
+                            </div>
+                            {{/if}}
+                        </div>
+                    </div>
+                    {{/if}}
+                    {{/each}}
+                </div>
+            </div>
+            {{/if}}
+
             <div class="teams-list">
-                {{#each allies as |ally idx|}}
+                {{#each regularAllies as |ally|}}
                 {{#if (or ../isGM ally.enabled)}}
                 <div class="team-card {{#unless ally.enabled}}ally-disabled{{/unless}} {{#if (or ally.captured ally.missing)}}ally-captured{{/if}}">
                     <div class="team-img-container">
@@ -511,11 +601,11 @@
                                 {{/if}}
                                 <label class="ally-toggle"
                                     title="{{#if ally.enabled}}Отключить союзника{{else}}Включить союзника{{/if}}">
-                                    <input type="checkbox" class="ally-enabled-check" name="allies.{{idx}}.enabled"
-                                        data-index="{{idx}}" {{checked ally.enabled}}>
+                                    <input type="checkbox" class="ally-enabled-check" name="allies.{{ally.idx}}.enabled"
+                                        data-index="{{ally.idx}}" {{checked ally.enabled}}>
                                     <i class="fas {{#if ally.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i>
                                 </label>
-                                <a class="delete-ally control-btn" data-index="{{idx}}" title="Удалить"><i
+                                <a class="delete-ally control-btn" data-index="{{ally.idx}}" title="Удалить"><i
                                         class="fas fa-trash"></i></a>
                                 {{/if}}
                             </div>
@@ -536,7 +626,7 @@
                                 {{/if}}
                             </div>
                             {{#if ../isGM}}
-                            <select name="allies.{{idx}}.favoritePlayer" {{#unless ally.enabled}}disabled{{/unless}} class="manticce-favorite-select">
+                            <select name="allies.{{ally.idx}}.favoritePlayer" {{#unless ally.enabled}}disabled{{/unless}} class="manticce-favorite-select">
                                 <option value="">Выберите любимого ПИ</option>
                                 {{#each ../playerCharacters as |pc|}}
                                 <option value="{{pc.name}}" {{#if (eq pc.name ally.favoritePlayer)}}selected{{/if}}>{{pc.name}}</option>
@@ -547,14 +637,14 @@
                         {{/if}}
                         {{#if ally.hasState}}
                         <div class="ally-state-row">
-                            <label><input type="checkbox" name="allies.{{idx}}.revealed" data-index="{{idx}}" {{checked ally.revealed}}>
+                            <label><input type="checkbox" name="allies.{{ally.idx}}.revealed" data-index="{{ally.idx}}" {{checked ally.revealed}}>
                                 Прикрытие раскрыто</label>
                         </div>
                         {{/if}}
                         {{#if ally.hasChoice}}
                         <div class="ally-choice-row">
                             <label>Бонус +1 к:
-                                <select name="allies.{{idx}}.selectedBonus">
+                                <select name="allies.{{ally.idx}}.selectedBonus">
                                     {{selectOptions ../mialariOptions selected=ally.selectedBonus}}
                                 </select>
                             </label>
@@ -572,7 +662,7 @@
                             </div>
                             {{#if ally.monthlyActionStatus.canUse}}
                             {{#if ../isGM}}
-                            <button type="button" class="execute-monthly-action-btn" data-ally="{{ally.slug}}" data-index="{{idx}}">
+                            <button type="button" class="execute-monthly-action-btn" data-ally="{{ally.slug}}" data-index="{{ally.idx}}">
                                 <i class="fas fa-box"></i> Создать тайник
                             </button>
                             {{/if}}
@@ -581,9 +671,9 @@
                         {{/if}}
                         {{#if ally.enabled}}
                         <div class="checkbox-row">
-                            <label><input type="checkbox" name="allies.{{idx}}.missing" {{checked ally.missing}}>
+                            <label><input type="checkbox" name="allies.{{ally.idx}}.missing" {{checked ally.missing}}>
                                 Пропал</label>
-                            <label><input type="checkbox" name="allies.{{idx}}.captured" {{checked ally.captured}}>
+                            <label><input type="checkbox" name="allies.{{ally.idx}}.captured" {{checked ally.captured}}>
                                 Схвачен</label>
                         </div>
                         {{/if}}

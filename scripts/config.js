@@ -268,6 +268,115 @@ export const ALLY_DEFINITIONS = {
         }
     },
 
+    aulamaxa: {
+        name: "Ауламакса",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Aulamaxa.webp",
+        description: "Преимущество Союза: Серебряные Вороны теперь могут предпринимать действие восстания Вербовка Сторонников до двух раз за Фазу Деятельности.",
+        desc: "Вербовка сторонников до 2 раз за фазу.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            recruitSupportersLimit: 2
+        }
+    },
+    aulorian: {
+        name: "Аулориан",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Aulorian.webp",
+        description: "Преимущество Союза: Информация Ауксиса позволяет восстанию предпринимать действие Снижение Опасности каждую неделю в качестве бонусного действия, даже если у восстания обычно нет команды для этого.",
+        desc: "Бонусное Снижение Опасности 1 раз в неделю.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            bonusReduceDangerWeekly: true
+        }
+    },
+    delronge: {
+        name: "Делрондж",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Delronge.webp",
+        description: "Преимущество Союза: Мастера охоты и коневодства. Они покрывают часть расходов восстания. Восстание тратит в половину меньше казны каждую неделю.",
+        desc: "Расходы казны уменьшены вдвое.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            halveTreasuryUpkeep: true
+        }
+    },
+    jarvis: {
+        name: "Джарвис",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Jarvis.webp",
+        description: "Преимущество Союза: Баронесса предоставляет карты забытых маршрутов. Восстание получает постоянный бонус обстоятельство +2 к проверкам Безопасности.",
+        desc: "+2 к Безопасности.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            security: 2
+        }
+    },
+    jhaltero: {
+        name: "Джалтеро",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Jhaltero.webp",
+        description: "Преимущество Союза: Доступ к информационной сети барона дает восстанию бонус обстоятельство +2 к проверкам Секретности.",
+        desc: "+2 к Секретности.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            secrecy: 2
+        }
+    },
+    sarini: {
+        name: "Сарини",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Sarini.webp",
+        description: "Преимущество Союза: Дьявопоклоники Сарини могут помочь завербовать тех, кого обычно восстанию не завербовать. Вы получаете бонус вербовщика, равный рангу восстания.",
+        desc: "Бонус Вербовщиков = ранг восстания.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            recruitmentBonusByRank: true
+        }
+    },
+    tanessen: {
+        name: "Танессен",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Tanessen.webp",
+        description: "Преимущество Союза: Оружейный запас этой семьи вдохновляет восстание и дает бонус обстоятельства +2 к проверкам Верности.",
+        desc: "+2 к Верности.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            loyalty: 2
+        }
+    },
+    vashnarstill: {
+        name: "Вашнарстилл",
+        img: "modules/pf2e-ts-adv-pf1ehr/97/art/Vashnarstill.webp",
+        description: "Преимущество Союза: Вашнарстиллы бесплатно финансируют размещение до трёх малых тайников и одного среднего тайника в месяц.",
+        desc: "Бесплатно: до 3 малых и 1 среднего тайника в месяц.",
+        canBeOfficer: false,
+        adventure: 3,
+        courtOfCoins: true,
+        level: 0,
+        bonuses: {
+            freeCacheMonthly: true,
+            freeCacheMonthlyLimits: {
+                small: 3,
+                medium: 1
+            }
+        }
+    },
+
     // === ADVENTURE 3: DANCE OF THE DAMNED ===
     jilia: {
         name: "Джилия Байнилус",

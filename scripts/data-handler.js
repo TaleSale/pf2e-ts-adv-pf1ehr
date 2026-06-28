@@ -284,6 +284,9 @@ export class DataHandler {
         if (officersByRole.recruiter?.length) {
             stats.recruitmentBonus = officersByRole.recruiter.reduce((s, r) => s + r.val, 0);
         }
+        if (this.isAllyActive(data, 'sarini')) {
+            stats.recruitmentBonus += Number(data.rank || 0);
+        }
 
         // Sentinel adds +1 to two secondary checks
         if (officersByRole.sentinel?.length) {
@@ -314,11 +317,20 @@ export class DataHandler {
                 add('security', 'Джилия', 2);
                 add('loyalty', 'Джилия', 2);
             }
+            if (a.slug === 'jarvis') {
+                add('security', 'Джарвис', 2);
+            }
             if (a.slug === 'jackdaw') {
                 ['loyalty', 'security', 'secrecy'].forEach(t => add(t, "Галка", 1));
             }
+            if (a.slug === 'jhaltero') {
+                add('secrecy', 'Джалтеро', 2);
+            }
             if (a.slug === 'mialari' && a.selectedBonus) {
                 add(a.selectedBonus, "Миалари", 1);
+            }
+            if (a.slug === 'tanessen') {
+                add('loyalty', 'Танессен', 2);
             }
             if (a.slug === 'tayacet') {
                 if (a.revealed) {
@@ -400,6 +412,33 @@ export class DataHandler {
         });
 
         return { bonus, sources };
+    }
+
+    static getRecruitSupportersLimit(data) {
+        return this.isAllyActive(data, 'aulamaxa') ? 2 : 1;
+    }
+
+    static getRecruitSupportersUses(data) {
+        const directValue = Number(data?.recruitSupportersUsesThisPhase);
+        if (Number.isFinite(directValue) && directValue >= 0) return directValue;
+        return data?.recruitedThisPhase ? 1 : 0;
+    }
+
+    static getRecruitSupportersRemaining(data) {
+        return Math.max(0, this.getRecruitSupportersLimit(data) - this.getRecruitSupportersUses(data));
+    }
+
+    static canUseRecruitSupporters(data) {
+        if ((data?.rank || 0) >= (data?.maxRank || 20)) return false;
+        return this.getRecruitSupportersRemaining(data) > 0;
+    }
+
+    static getRecruitSupportersUsageUpdate(data) {
+        const uses = this.getRecruitSupportersUses(data) + 1;
+        return {
+            recruitedThisPhase: uses > 0,
+            recruitSupportersUsesThisPhase: uses
+        };
     }
 
     /**
@@ -633,15 +672,24 @@ export class DataHandler {
     static getMinTreasury(data) {
         // Use maintenance settings if available, otherwise fall back to default formula
         const maintenanceSettings = data.maintenanceSettings;
-        
+        let minTreasury = null;
+
         if (maintenanceSettings && maintenanceSettings.minTreasury) {
             const rankKey = `rank${data.rank}`;
             if (maintenanceSettings.minTreasury[rankKey] !== undefined) {
-                return maintenanceSettings.minTreasury[rankKey];
+                minTreasury = maintenanceSettings.minTreasury[rankKey];
             }
         }
-        
-        return MIN_TREASURY_BY_RANK[data.rank] ?? 19;
+
+        if (minTreasury === null) {
+            minTreasury = MIN_TREASURY_BY_RANK[data.rank] ?? 19;
+        }
+
+        if (this.isAllyActive(data, 'delronge')) {
+            minTreasury = Math.max(1, Math.ceil(minTreasury / 2));
+        }
+
+        return minTreasury;
     }
 
     // Check if treasury is below minimum
@@ -843,6 +891,40 @@ export class DataHandler {
         return count;
     }
 
+    static getWeeklyAllyActionStatus(data, allySlug) {
+        const ally = data.allies?.find((item) => item.slug === allySlug);
+        const lastUsedWeek = Number(ally?.weeklyActionUsedWeek);
+        return {
+            canUse: !Number.isFinite(lastUsedWeek) || lastUsedWeek !== data.week,
+            lastUsedWeek: Number.isFinite(lastUsedWeek) ? lastUsedWeek : null
+        };
+    }
+
+    static async markWeeklyAllyActionUsed(data, allySlug) {
+        const allies = JSON.parse(JSON.stringify(data.allies || []));
+        const idx = allies.findIndex((ally) => ally.slug === allySlug);
+        if (idx === -1) return;
+        allies[idx].weeklyActionUsedWeek = data.week;
+        await this.update({ allies });
+    }
+
+    static canUseAulorianBonusAction(data, team) {
+        if (!this.hasAulorianBonusAction(data, team)) return false;
+        const status = this.getWeeklyAllyActionStatus(data, "aulorian");
+        if (!status.canUse) return false;
+        return true;
+    }
+
+    static hasAlly(data, slug) {
+        return !!data?.allies?.some((ally) => ally.slug === slug);
+    }
+
+    static hasAulorianBonusAction(data, team) {
+        if (!team || !this.isTeamEffectivelyOperational(team)) return false;
+        if (!this.hasAlly(data, "aulorian")) return false;
+        return true;
+    }
+
     // === MONTHLY ACTIONS TRACKING ===
 
     /**
@@ -852,6 +934,13 @@ export class DataHandler {
      * @returns {boolean}
      */
     static canUseMonthlyAction(data, allySlug) {
+        const allyDef = ALLY_DEFINITIONS[allySlug];
+        const limits = allyDef?.bonuses?.freeCacheMonthlyLimits;
+        if (limits) {
+            const status = this.getMonthlyActionStatus(data, allySlug);
+            return status.canUse;
+        }
+
         if (!data.monthlyActions) data.monthlyActions = {};
         
         const lastUsed = data.monthlyActions[allySlug];
@@ -876,14 +965,34 @@ export class DataHandler {
      * @param {Object} data - rebellion data
      * @param {string} allySlug - ally identifier
      */
-    static async useMonthlyAction(data, allySlug) {
+    static async useMonthlyAction(data, allySlug, details = {}) {
         console.log(`useMonthlyAction called - allySlug: ${allySlug}, week: ${data.week}`);
         
-        const monthlyActions = { ...data.monthlyActions };
-        
-        monthlyActions[allySlug] = {
-            lastUsedWeek: data.week
-        };
+        const monthlyActions = { ...(data.monthlyActions || {}) };
+        const allyDef = ALLY_DEFINITIONS[allySlug];
+        const limits = allyDef?.bonuses?.freeCacheMonthlyLimits;
+
+        if (limits) {
+            const existing = monthlyActions[allySlug] || {};
+            const inSamePeriod = Number.isFinite(Number(existing.periodStartWeek)) && (data.week - Number(existing.periodStartWeek) < 4);
+            const usage = inSamePeriod ? {
+                small: Number(existing.usage?.small) || 0,
+                medium: Number(existing.usage?.medium) || 0
+            } : { small: 0, medium: 0 };
+            const cacheSize = details.cacheSize;
+            if (cacheSize && usage[cacheSize] !== undefined) {
+                usage[cacheSize] += 1;
+            }
+
+            monthlyActions[allySlug] = {
+                periodStartWeek: inSamePeriod ? Number(existing.periodStartWeek) : data.week,
+                usage
+            };
+        } else {
+            monthlyActions[allySlug] = {
+                lastUsedWeek: data.week
+            };
+        }
         
         console.log(`Setting monthlyActions[${allySlug}] =`, monthlyActions[allySlug]);
         
@@ -898,6 +1007,34 @@ export class DataHandler {
      * @returns {Object} - {canUse: boolean, lastUsedWeek: number, currentMonth: number}
      */
     static getMonthlyActionStatus(data, allySlug) {
+        const allyDef = ALLY_DEFINITIONS[allySlug];
+        const limits = allyDef?.bonuses?.freeCacheMonthlyLimits;
+        if (limits) {
+            const stored = data.monthlyActions?.[allySlug];
+            const inSamePeriod = Number.isFinite(Number(stored?.periodStartWeek)) && (data.week - Number(stored.periodStartWeek) < 4);
+            const usage = inSamePeriod ? {
+                small: Number(stored?.usage?.small) || 0,
+                medium: Number(stored?.usage?.medium) || 0
+            } : { small: 0, medium: 0 };
+            const remaining = {
+                small: Math.max(0, (limits.small || 0) - usage.small),
+                medium: Math.max(0, (limits.medium || 0) - usage.medium)
+            };
+            const canUse = remaining.small > 0 || remaining.medium > 0;
+            const weeksUntilAvailable = canUse
+                ? null
+                : Math.max(0, ((Number(stored?.periodStartWeek) || data.week) + 4) - data.week);
+
+            return {
+                canUse,
+                lastUsedWeek: inSamePeriod ? stored?.periodStartWeek || null : null,
+                weeksUntilAvailable,
+                remaining,
+                limits,
+                label: `Малые: ${remaining.small}/${limits.small}, средние: ${remaining.medium}/${limits.medium}`
+            };
+        }
+
         const lastUsed = data.monthlyActions?.[allySlug];
         const canUse = this.canUseMonthlyAction(data, allySlug);
         

@@ -302,6 +302,12 @@ export class RebellionSheet extends FormApplication {
         const hasVendalfek = DataHandler.isAllyActive(data, 'vendalfek');
         const hasManticce = DataHandler.isAllyActive(data, 'manticce');
         const hasStrategist = hasActiveStrategistOfficer(data);
+        const recruitSupportersLimit = DataHandler.getRecruitSupportersLimit(data);
+        const recruitSupportersUses = DataHandler.getRecruitSupportersUses(data);
+        const recruitSupportersAvailable = DataHandler.canUseRecruitSupporters(data);
+        const recruitSupportersLabel = recruitSupportersLimit > 1
+            ? `Вербовать сторонников (${recruitSupportersUses}/${recruitSupportersLimit})`
+            : (recruitSupportersAvailable ? "Вербовать сторонников" : "Вербовать сторонников (использовано)");
 
         // Create Silver Ravens team (always first, but NOT counted as a team)
         // Silver Ravens is a virtual team for PC actions, not a real team
@@ -359,7 +365,7 @@ export class RebellionSheet extends FormApplication {
             isOperational: true,
             isEffectivelyOperational: true,
             allActions: {
-                recruitSupporters: data.recruitedThisPhase ? "Вербовать сторонников (использовано)" : "Вербовать сторонников",
+                recruitSupporters: recruitSupportersLabel,
                 lieLow: "Залечь на дно",
                 guarantee: "Гарантирование события",
                 changeOfficer: "Смена роли офицера",
@@ -396,8 +402,8 @@ export class RebellionSheet extends FormApplication {
             def.caps.forEach(c => { if (SPECIFIC_ACTIONS[c]) acts[c] = SPECIFIC_ACTIONS[c]; });
 
             // Mark recruitSupporters as used if already done this phase
-            if (acts['recruitSupporters'] && data.recruitedThisPhase) {
-                acts['recruitSupporters'] = acts['recruitSupporters'] + " (использовано)";
+            if (acts['recruitSupporters']) {
+                acts['recruitSupporters'] = recruitSupportersLabel;
             }
 
             // Molly: Team she manages gains Covert Operation and Sabotage
@@ -410,6 +416,12 @@ export class RebellionSheet extends FormApplication {
 
             // Vendalfek: Enables Disinformation without a team that normally has it
             if (hasVendalfek && !acts['disinformation']) acts['disinformation'] = SPECIFIC_ACTIONS['disinformation'] + " (Вендалфек)";
+            if (DataHandler.canUseAulorianBonusAction(data, team)) {
+                acts['aulorianBonusReduceDanger'] = "Доп. действие: Снижение опасности (Аулориан)";
+            }
+            if (DataHandler.canUseManticceBonusAction(data, team)) {
+                acts['manticceBonusEarnGold'] = "Доп. действие: Заработок золота (Мантикке)";
+            }
 
             const checkType = ACTION_CHECKS[team.currentAction];
             let baseBonus = checkType ? bonuses[checkType].total : 0;
@@ -508,6 +520,7 @@ export class RebellionSheet extends FormApplication {
                 modifiersStr: mods.length ? `${mods.join(" + ")} = <strong>${total >= 0 ? '+' : ''}${total}</strong>` : "Нет действия",
                 totalModifier: total,
                 actionDC: actionDC,
+                canUseAulorian: DataHandler.canUseAulorianBonusAction(data, team),
                 canUseManticce: DataHandler.canUseManticceBonusAction(data, team),
                 isOperational: DataHandler.isTeamOperational(team),
                 blockedByRivalry: team.blockedByRivalry || false,
@@ -549,12 +562,20 @@ export class RebellionSheet extends FormApplication {
                 hasState: def.hasState,
                 hasChoice: def.hasChoice,
                 adventure: def.adventure,
+                isCourtOfCoins: !!def.courtOfCoins,
                 enabled: a.enabled !== false, // Default to true if not set
                 hasMonthlyAction: hasMonthlyAction,
                 monthlyActionStatus: monthlyStatus,
+                hasWeeklyAction: !!def?.bonuses?.bonusReduceDangerWeekly && a.slug !== 'aulorian',
+                weeklyActionStatus: def?.bonuses?.bonusReduceDangerWeekly && a.slug !== 'aulorian'
+                    ? DataHandler.getWeeklyAllyActionStatus(data, a.slug)
+                    : null,
                 actorName: actorName
             };
         }));
+
+        const regularAllies = allies.filter(a => !a.isCourtOfCoins);
+        const courtOfCoinsAllies = allies.filter(a => a.isCourtOfCoins);
 
         // Count active and total allies
         const activeAllyCount = allies.filter(a => a.enabled && !a.missing && !a.captured).length;
@@ -603,7 +624,7 @@ export class RebellionSheet extends FormApplication {
         return {
             data, isGM: game.user.isGM, bonuses, officerList, candidateActors, focusTypes: FOCUS_TYPES,
             minTreasury, maxActions: bonuses.maxActions, maxTeams: rankInfo.maxTeams,
-            actionsRemaining, eventChance, teams, regularTeams, uniqueTeams, allies, mialariOptions: CHECK_LABELS,
+            actionsRemaining, eventChance, teams, regularTeams, uniqueTeams, allies, regularAllies, courtOfCoinsAllies, mialariOptions: CHECK_LABELS,
             hireableTeams, availableUniqueTeams, hasUniqueTeams, rankInfo, treasuryLow: DataHandler.isTreasuryLow(data),
             canRecruit: DataHandler.canRecruit(data),
             operationalTeamCount: DataHandler.countOperationalTeams(data),
@@ -921,6 +942,7 @@ export class RebellionSheet extends FormApplication {
         html.find('.delete-team').click((ev) => this._onDeleteTeam(ev));
         html.find('.delete-ally').click((ev) => this._onDeleteAlly(ev));
         html.find('.add-ally-btn').click(() => this._onAddAllyDialog());
+        html.find('.add-coin-court-ally-btn').click(() => this._onAddCoinCourtAllyDialog());
         html.find('.ally-settings-btn').click(() => this._onAllySettingsDialog());
         html.find('.ally-enabled-check').change((ev) => this._onAllyEnabledChange(ev));
         html.find('input[name$=".revealed"]').change((ev) => this._onAllyRevealedChange(ev));
@@ -934,11 +956,14 @@ export class RebellionSheet extends FormApplication {
         html.find('.maintenance-settings-btn').click(() => this._onMaintenanceSettingsDialog());
         html.find('.teams-settings-btn').click(() => this._onTeamsSettingsDialog());
 
+        this._enhanceAlliesAndTeamUI(html);
+
         // Cache Auto-Save - automatic save after editing
         html.find('input[name^="caches."]').change((ev) => this.submit({ preventClose: true, preventRender: true }));
         html.find('select[name^="caches."]').change((ev) => this.submit({ preventClose: true, preventRender: false })); // Re-render for type/size changes
 
         html.find('.execute-monthly-action-btn').click((ev) => this._onExecuteMonthlyAction(ev));
+        html.find('.execute-weekly-ally-action-btn').click((ev) => this._onExecuteWeeklyAllyAction(ev));
         html.find('.roll-check').click((ev) => this._onRollCheckDialogSafe(ev));
         html.find('.sentinel-check').change((ev) => this._onSentinelCheck(ev));
         html.find('.strategist-check').change((ev) => this._onStrategistCheck(ev));
@@ -950,7 +975,6 @@ export class RebellionSheet extends FormApplication {
         html.find('.recover-team-btn').click((ev) => this._onRecoverTeam(ev));
         html.find('.find-team-btn').click((ev) => this._onFindMissingTeam(ev));
         html.find('.execute-action-btn').click((ev) => this._onExecuteAction(ev));
-        html.find('.execute-manticce-bonus-btn').click((ev) => this._onExecuteManticceBonusAction(ev));
         html.find('.add-custom-effect-btn').click((ev) => this._onAddCustomEffect(ev));
         html.find('.delete-effect').click(async (ev) => {
             if (!game.user.isGM) return;
@@ -976,6 +1000,36 @@ export class RebellionSheet extends FormApplication {
 
         // Add global click handler for mitigation buttons in chat messages
         this._addChatMessageMitigationHandler();
+    }
+
+    _enhanceAlliesAndTeamUI(html) {
+        this._repositionCourtOfCoinsSection(html);
+        this._removeLegacyBonusActionButtons(html);
+    }
+
+    _repositionCourtOfCoinsSection(html) {
+        const alliesTab = html.find('.tab[data-tab="allies"]');
+        if (!alliesTab.length) return;
+
+        const courtSection = alliesTab.children('.unique-teams-section').first();
+        const regularAlliesList = alliesTab.children('.teams-list').first();
+        if (!courtSection.length || !regularAlliesList.length) return;
+
+        courtSection.find('.execute-weekly-ally-action-btn[data-ally="aulorian"]').closest('.action-row').remove();
+        alliesTab.find('.ally-controls').children('.add-coin-court-ally-btn').addClass('coin-court-inline-btn');
+
+        if (!regularAlliesList.next().hasClass('ally-court-divider')) {
+            $('<div class="unique-teams-divider ally-court-divider"></div>').insertAfter(regularAlliesList);
+        }
+
+        courtSection.addClass('ally-court-section');
+        courtSection.insertAfter(alliesTab.find('.ally-court-divider').first());
+    }
+
+    _removeLegacyBonusActionButtons(html) {
+        html.find('.execute-aulorian-bonus-btn, .execute-manticce-bonus-btn').each((_, button) => {
+            $(button).closest('div').remove();
+        });
     }
 
     // Initialize drag-and-drop for team reordering
@@ -1214,6 +1268,77 @@ export class RebellionSheet extends FormApplication {
             // Disable the button
             $(btn).prop('disabled', true).css('opacity', '0.5').text('Переброс использован');
         });
+    }
+
+    _buildTeamRollModifierData(team, selectedAction, data, baseCheckBonus) {
+        const additionalMods = [];
+        let totalMod = baseCheckBonus?.total || 0;
+
+        if (team.manager) {
+            const mgr = game.actors.getName(team.manager) || game.actors.get(team.manager);
+            if (mgr) {
+                const mgrBonus = mgr.system?.abilities?.cha?.mod || 0;
+                if (mgrBonus !== 0) {
+                    additionalMods.push({ label: `Командир (${mgr.name})`, value: mgrBonus });
+                    totalMod += mgrBonus;
+                }
+            }
+        }
+
+        if (team.bonus) {
+            additionalMods.push({ label: "Ручной бонус", value: team.bonus });
+            totalMod += team.bonus;
+        }
+
+        if (hasActiveStrategistOfficer(data) && team.isStrategistTarget) {
+            additionalMods.push({ label: "Стратег", value: 2 });
+            totalMod += 2;
+        }
+
+        const def = getTeamDefinition(team.type);
+        if (selectedAction === 'gatherInfo') {
+            const teamRank = def?.rank || 1;
+            additionalMods.push({ label: "Ранг команды ×2", value: teamRank * 2 });
+            totalMod += teamRank * 2;
+        }
+
+        if (selectedAction === 'earnGold') {
+            const teamRank = def?.rank || 1;
+            const halfRankBonus = getHalfRankBonus(data.rank);
+            const profBonus = getTeamProficiencyBonus(teamRank);
+            const profLabel = { 1: 'Обуч.', 2: 'Эксп.', 3: 'Мастер' }[teamRank] || 'Обуч.';
+            additionalMods.push({ label: `½ ранга (${data.rank})`, value: halfRankBonus });
+            additionalMods.push({ label: `Мастерство (${profLabel})`, value: profBonus });
+            totalMod += halfRankBonus + profBonus;
+        }
+
+        if (selectedAction === 'rescue' && team.type === 'orderTorrent') {
+            additionalMods.push({ label: "Орден Потока", value: 4 });
+            totalMod += 4;
+        }
+
+        if (selectedAction === 'sabotage' && (team.type === 'bellflower' || team.type === 'lacunafex')) {
+            additionalMods.push({ label: team.type === 'bellflower' ? "Сеть Колокольчиков" : "Лакунафекс", value: 2 });
+            totalMod += 2;
+        }
+
+        if (selectedAction === 'covert' && team.type === 'lacunafex') {
+            additionalMods.push({ label: "Лакунафекс", value: 2 });
+            totalMod += 2;
+        }
+
+        if (selectedAction === 'disinformation' && DataHandler.isAllyActive(data, 'vendalfek')) {
+            const hasDisinfoTeam = data.teams.some(t =>
+                !t.disabled && !t.missing &&
+                ['rumormongers', 'agitators', 'cognoscenti'].includes(t.type)
+            );
+            if (hasDisinfoTeam) {
+                additionalMods.push({ label: "Вендалфек", value: 4 });
+                totalMod += 4;
+            }
+        }
+
+        return { additionalMods, totalMod };
     }
 
     // === HIRE TEAM ===
@@ -1715,7 +1840,11 @@ export class RebellionSheet extends FormApplication {
     // Helper function to create beautiful team action messages
     _createTeamActionMessage(team, action, result, roll, total, dc, additionalInfo = "") {
         const def = getTeamDefinition(team.type);
-        const actionLabel = SPECIFIC_ACTIONS[action] || UNIVERSAL_ACTIONS[action] || action;
+        const bonusActionLabels = {
+            aulorianBonusReduceDanger: "Доп. действие: Снижение опасности (Аулориан)",
+            manticceBonusEarnGold: "Доп. действие: Заработок золота (Мантикке)"
+        };
+        const actionLabel = bonusActionLabels[action] || SPECIFIC_ACTIONS[action] || UNIVERSAL_ACTIONS[action] || action;
         const checkType = ACTION_CHECKS[action];
         const checkLabel = checkType ? CHECK_LABELS[checkType] : "";
 
@@ -2147,6 +2276,7 @@ export class RebellionSheet extends FormApplication {
                 const recruitRoll = new Roll("2d6");
                 await recruitRoll.evaluate();
                 let supportersGained = recruitRoll.total + (bonuses.recruitmentBonus || 0);
+                const currentSupporters = Number(data.supporters || 0);
 
                 let recruitmentDetails = `2d6: ${recruitRoll.total}`;
                 if (bonuses.recruitmentBonus > 0) {
@@ -2160,8 +2290,8 @@ export class RebellionSheet extends FormApplication {
                     recruitmentDetails += ` × 2 (Неделя Секретности)`;
                 }
 
-                const newSupporters = Math.min(data.supporters + supportersGained, data.population);
-                const actualGained = newSupporters - data.supporters;
+                const newSupporters = currentSupporters + supportersGained;
+                const actualGained = newSupporters - currentSupporters;
 
                 const message = this._createTeamActionMessage(
                     silverRavensTeam, selectedAction, "success", roll, total, dc,
@@ -2173,7 +2303,7 @@ export class RebellionSheet extends FormApplication {
                 await DataHandler.update({
                     supporters: newSupporters,
                     actionsUsedThisWeek: data.actionsUsedThisWeek + 1,
-                    recruitedThisPhase: true
+                    ...DataHandler.getRecruitSupportersUsageUpdate(data)
                 });
             } else {
                 // Check for natural 1 - not auto-fail but +1d6 Notoriety
@@ -2195,7 +2325,7 @@ export class RebellionSheet extends FormApplication {
                 await this._logToJournal(message);
                 await DataHandler.update({
                     actionsUsedThisWeek: data.actionsUsedThisWeek + 1,
-                    recruitedThisPhase: true,
+                    ...DataHandler.getRecruitSupportersUsageUpdate(data),
                     notoriety: data.notoriety + notorietyIncrease
                 });
             }
@@ -2262,6 +2392,22 @@ export class RebellionSheet extends FormApplication {
         if (selectedAction === 'recruitTeam') {
             this._onHireTeamDialog();
             return;
+        }
+        if (selectedAction === 'aulorianBonusReduceDanger') {
+            actionSelect.val('');
+            team.currentAction = "";
+            return this._onExecuteAulorianBonusAction({
+                preventDefault: () => { },
+                currentTarget: { dataset: { index: String(teamIdx) } }
+            });
+        }
+        if (selectedAction === 'manticceBonusEarnGold') {
+            actionSelect.val('');
+            team.currentAction = "";
+            return this._onExecuteManticceBonusAction({
+                preventDefault: () => { },
+                currentTarget: { dataset: { index: String(teamIdx) } }
+            });
         }
 
         // Проверяем лимит действий, но не для бонусного действия стратега
@@ -2650,13 +2796,12 @@ export class RebellionSheet extends FormApplication {
 
         // Проверки для действия "Вербовать сторонников" ПЕРЕД роллом
         if (selectedAction === 'recruitSupporters') {
-            // Check once per phase limit
-            if (data.recruitedThisPhase) {
-                ui.notifications.warn("Вербовать сторонников можно только один раз за фазу Деятельности!");
+            if (!DataHandler.canUseRecruitSupporters(data)) {
+                const limit = DataHandler.getRecruitSupportersLimit(data);
+                ui.notifications.warn(`Вербовать сторонников можно только ${limit} ${limit > 1 ? 'раза' : 'раз'} за фазу Деятельности!`);
                 return;
             }
 
-            // Check max rank limit
             if (data.rank >= data.maxRank) {
                 ui.notifications.warn("Нельзя вербовать сторонников на максимальном ранге восстания!");
                 return;
@@ -2733,6 +2878,7 @@ export class RebellionSheet extends FormApplication {
                 const recruitRoll = new Roll("2d6");
                 await recruitRoll.evaluate();
                 let recruited = recruitRoll.total + bonuses.recruitmentBonus;
+                const currentSupporters = Number(data.supporters || 0);
 
                 // Неделя Секретности удваивает вербовку
                 let recruitmentDetails = `2d6: ${recruitRoll.total}`;
@@ -2744,13 +2890,16 @@ export class RebellionSheet extends FormApplication {
                     recruitmentDetails += ` × 2 (Неделя Секретности)`;
                 }
 
+                const newSupporters = currentSupporters + recruited;
+                const actualGained = newSupporters - currentSupporters;
+
                 const message = this._createTeamActionMessage(
                     team, selectedAction, "success", roll, total, dc,
-                    `Завербовано: <strong>${recruited}</strong> сторонников (${recruitmentDetails})`
+                    `Завербовано: <strong>${actualGained}</strong> сторонников (${recruitmentDetails})`
                 );
                 ChatMessage.create({ content: message, speaker: ChatMessage.getSpeaker() });
                 await this._logToJournal(message);
-                await DataHandler.update({ teams, supporters: data.supporters + recruited, actionsUsedThisWeek: data.actionsUsedThisWeek + 1, recruitedThisPhase: true });
+                await DataHandler.update({ teams, supporters: newSupporters, actionsUsedThisWeek: data.actionsUsedThisWeek + 1, ...DataHandler.getRecruitSupportersUsageUpdate(data) });
             } else {
                 const result = roll.total === 1 ? "critical" : "failure";
                 let additionalInfo = "Сторонники не завербованы";
@@ -2763,7 +2912,7 @@ export class RebellionSheet extends FormApplication {
                     additionalInfo = `Естественная 1! +${notorietyIncrease} Известность`;
                 }
 
-                await DataHandler.update({ teams, notoriety: data.notoriety + notorietyIncrease, actionsUsedThisWeek: data.actionsUsedThisWeek + 1, recruitedThisPhase: true });
+                await DataHandler.update({ teams, notoriety: data.notoriety + notorietyIncrease, actionsUsedThisWeek: data.actionsUsedThisWeek + 1, ...DataHandler.getRecruitSupportersUsageUpdate(data) });
 
                 const message = this._createTeamActionMessage(
                     team, selectedAction, result, roll, total, dc, additionalInfo
@@ -3221,13 +3370,12 @@ export class RebellionSheet extends FormApplication {
 
         // Проверки для действия "Вербовать сторонников" ПЕРЕД роллом
         if (selectedAction === 'recruitSupporters') {
-            // Check once per phase limit
-            if (data.recruitedThisPhase) {
-                ui.notifications.warn("Вербовать сторонников можно только один раз за фазу Деятельности!");
+            if (!DataHandler.canUseRecruitSupporters(data)) {
+                const limit = DataHandler.getRecruitSupportersLimit(data);
+                ui.notifications.warn(`Вербовать сторонников можно только ${limit} ${limit > 1 ? 'раза' : 'раз'} за фазу Деятельности!`);
                 return;
             }
 
-            // Check max rank limit
             if (data.rank >= data.maxRank) {
                 ui.notifications.warn("Нельзя вербовать сторонников на максимальном ранге восстания!");
                 return;
@@ -3420,6 +3568,137 @@ export class RebellionSheet extends FormApplication {
             console.log("PF2e API недоступен. Используем fallback бросок для бонусного действия Мантикке.");
             await this._fallbackManticceBonusRoll(team, def, dc, totalMod, data);
         }
+    }
+
+    async _onExecuteAulorianBonusAction(ev) {
+        ev.preventDefault();
+        const idx = Number(ev.currentTarget.dataset.index);
+        const data = DataHandler.get();
+        const team = data.teams[idx];
+        if (!team) {
+            ui.notifications.warn("Команда не найдена!");
+            return;
+        }
+
+        if (!DataHandler.canUseAulorianBonusAction(data, team)) {
+            const status = DataHandler.getWeeklyAllyActionStatus(data, 'aulorian');
+            if (!status.canUse) {
+                ui.notifications.warn("Бонусное действие Аулорианов уже использовано на этой неделе!");
+            } else {
+                ui.notifications.warn("Эта команда не может выполнить бонусное Снижение Опасности.");
+            }
+            return;
+        }
+
+        const def = getTeamDefinition(team.type);
+        const checkType = 'security';
+        const dc = 10 + data.rank;
+        const bonuses = DataHandler.getRollBonuses(data, 'reduceDanger');
+        const checkBonus = bonuses[checkType] || { total: 0, parts: [] };
+        const { additionalMods, totalMod } = this._buildTeamRollModifierData(team, 'reduceDanger', data, checkBonus);
+
+        if (game.pf2e && game.pf2e.Check && game.pf2e.Modifier && game.pf2e.CheckModifier) {
+            const modifiers = checkBonus.parts.map(p => new game.pf2e.Modifier({
+                label: p.label,
+                modifier: p.value,
+                type: "untyped"
+            }));
+
+            additionalMods.forEach(m => {
+                modifiers.push(new game.pf2e.Modifier({
+                    label: m.label,
+                    modifier: m.value,
+                    type: "untyped"
+                }));
+            });
+
+            const actor = game.user.character || game.actors.find(a => a.hasPlayerOwner && a.type === "character") || game.actors.first();
+
+            try {
+                game.rebellionState = {
+                    isAulorianBonusRoll: true,
+                    teamIdx: idx,
+                    teamType: team.type,
+                    dc,
+                    totalMod,
+                    timestamp: Date.now()
+                };
+
+                await game.pf2e.Check.roll(
+                    new game.pf2e.CheckModifier("Безопасность", { modifiers }),
+                    {
+                        actor,
+                        type: 'check',
+                        createMessage: true,
+                        skipDialog: false,
+                        dc: { value: dc },
+                        title: `${def.label}: Бонусное действие Аулорианов`,
+                        notes: [`Бонусное действие дома Аулориан: Снижение Опасности`],
+                        context: {
+                            type: "skill-check",
+                            skill: checkType,
+                            action: checkType,
+                            isAulorianBonusRoll: true,
+                            teamIdx: idx
+                        }
+                    },
+                    ev
+                );
+            } catch (err) {
+                console.error("Rebellion: PF2e Check.roll провалился для бонусного действия Аулорианов:", err);
+                game.rebellionState = null;
+                await this._fallbackAulorianBonusRoll(team, dc, totalMod, data);
+            }
+        } else {
+            await this._fallbackAulorianBonusRoll(team, dc, totalMod, data);
+        }
+    }
+
+    async _fallbackAulorianBonusRoll(team, dc, totalMod, data) {
+        const roll = new Roll("1d20");
+        await roll.evaluate();
+        const total = roll.total + totalMod;
+        const success = total >= dc;
+
+        const additionalInfo = `🏛️ <strong>Бонусное действие дома Аулориан</strong><br>Не расходует обычное действие команды`;
+
+        if (success) {
+            const reduction = 5 + Math.floor((total - dc) / 10) * 5;
+            const currentEvents = JSON.parse(JSON.stringify(data.events || []));
+            currentEvents.push({
+                name: "Сниженная опасность (Аулориан)",
+                desc: `Опасность снижена на ${reduction}% благодаря бонусному действию дома Аулориан.`,
+                weekStarted: data.week + 1,
+                duration: 1,
+                isPersistent: false,
+                isActionEffect: true,
+                dangerReduction: reduction
+            });
+
+            const message = this._createTeamActionMessage(
+                team, 'reduceDanger', 'success', roll, total, dc,
+                `${additionalInfo}<br>Опасность снижена на <strong>${reduction}%</strong> на следующую неделю`
+            );
+            ChatMessage.create({ content: message, speaker: ChatMessage.getSpeaker() });
+            await this._logToJournal(message);
+            await DataHandler.update({ events: currentEvents });
+        } else {
+            const incRoll = new Roll("1d4");
+            await incRoll.evaluate();
+            const inc = incRoll.total;
+
+            const message = this._createTeamActionMessage(
+                team, 'reduceDanger', 'failure', roll, total, dc,
+                `${additionalInfo}<br>Провал! Известность +${inc}`
+            );
+            ChatMessage.create({ content: message, speaker: ChatMessage.getSpeaker() });
+            await this._logToJournal(message);
+            await DataHandler.update({ notoriety: data.notoriety + inc });
+        }
+
+        await DataHandler.markWeeklyAllyActionUsed(DataHandler.get(), 'aulorian');
+        ui.notifications.info("Бонусное действие Аулорианов выполнено.");
+        this.render(false);
     }
 
     // Fallback функция для автоброска бонусного действия Мантикке
@@ -3662,7 +3941,8 @@ export class RebellionSheet extends FormApplication {
                 phaseReport: log,
                 actionsUsedThisWeek: 0, // Reset for new week
                 strategistUsed: false, // Reset strategist usage for new week
-                recruitedThisPhase: false // Reset recruit limit for new week
+                recruitedThisPhase: false, // Reset recruit limit for new week
+                recruitSupportersUsesThisPhase: 0
             });
 
             log += `Проверка убыли (Верность): 1d20(${roll.total}) + ${bonuses.loyalty.total} = ${total}. ${resultText}\n`;
@@ -4004,7 +4284,7 @@ export class RebellionSheet extends FormApplication {
                 }
             }
 
-            await DataHandler.update({ rank: newRank, actionsUsedThisWeek: 0, strategistUsed: false, recruitedThisPhase: false });
+            await DataHandler.update({ rank: newRank, actionsUsedThisWeek: 0, strategistUsed: false, recruitedThisPhase: false, recruitSupportersUsesThisPhase: 0 });
 
             let message = `
                 <div style="
@@ -4035,7 +4315,7 @@ export class RebellionSheet extends FormApplication {
             ChatMessage.create({ content: message, speaker: ChatMessage.getSpeaker() });
             await this._logToJournal(message);
         } else {
-            await DataHandler.update({ actionsUsedThisWeek: 0, strategistUsed: false, recruitedThisPhase: false });
+            await DataHandler.update({ actionsUsedThisWeek: 0, strategistUsed: false, recruitedThisPhase: false, recruitSupportersUsesThisPhase: 0 });
             let message = `
                 <div style="
                     border: 3px solid #3498db; 
@@ -6501,6 +6781,7 @@ export class RebellionSheet extends FormApplication {
                 actionsUsedThisWeek: 0,
                 strategistUsed: false,
                 recruitedThisPhase: false,
+                recruitSupportersUsesThisPhase: 0,
                 manticceBonusUsedThisWeek: false,
             });
 
@@ -8547,7 +8828,7 @@ export class RebellionSheet extends FormApplication {
         const existingSlugs = (data.allies || []).map(a => a.slug);
 
         // Get all allies grouped by adventure
-        const allAllies = getAllAllies().filter(a => !existingSlugs.includes(a.slug));
+        const allAllies = getAllAllies().filter(a => !existingSlugs.includes(a.slug) && !a.courtOfCoins);
 
         if (allAllies.length === 0) {
             ui.notifications.info("Все союзники уже добавлены.");
@@ -8684,6 +8965,89 @@ export class RebellionSheet extends FormApplication {
                 html.find('#ally-select').on('change', updatePreview);
                 updatePreview();
             }
+        }).render(true);
+    }
+
+    async _onAddCoinCourtAllyDialog() {
+        const data = DataHandler.get();
+        const existingSlugs = new Set((data.allies || []).map((ally) => ally.slug));
+        const availableHouses = getAllAllies().filter((ally) => ally.courtOfCoins && !existingSlugs.has(ally.slug));
+
+        if (availableHouses.length === 0) {
+            ui.notifications.info("Все дома Двора Монет уже добавлены.");
+            return;
+        }
+
+        let optionsHtml = "";
+        for (const house of availableHouses) {
+            optionsHtml += `<option value="${house.slug}">${house.name}</option>`;
+        }
+
+        const content = `
+            <form>
+                <p>Выберите дом Двора Монет:</p>
+                <div class="form-group">
+                    <select id="coin-court-ally-select" style="width: 100%;">
+                        ${optionsHtml}
+                    </select>
+                </div>
+                <div id="coin-court-ally-preview" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 5px;"></div>
+            </form>
+        `;
+
+        new Dialog({
+            title: "Добавить дом Двора Монет",
+            content,
+            buttons: {
+                add: {
+                    label: "Добавить",
+                    callback: async (html) => {
+                        const slug = html.find('#coin-court-ally-select').val();
+                        const allyDef = getAllyData(slug);
+                        if (!allyDef) return;
+
+                        const currentData = DataHandler.get();
+                        const allies = [...(currentData.allies || [])];
+                        allies.push({
+                            slug,
+                            name: allyDef.name,
+                            img: allyDef.img,
+                            enabled: true,
+                            disabled: false,
+                            missing: false,
+                            revealed: false,
+                            selectedBonus: null
+                        });
+
+                        await DataHandler.update({ allies });
+                        ui.notifications.info(`Дом "${allyDef.name}" добавлен в Двор Монет.`);
+                    }
+                },
+                cancel: {
+                    label: "Отмена"
+                }
+            },
+            render: (html) => {
+                const preview = html.find('#coin-court-ally-preview');
+                const renderPreview = () => {
+                    const slug = html.find('#coin-court-ally-select').val();
+                    const ally = getAllyData(slug);
+                    if (!ally) return;
+                    preview.html(`
+                        <div style="display:flex; gap:12px; align-items:flex-start;">
+                            <img src="${ally.img}" style="width:64px; height:64px; object-fit:cover; border-radius:8px;">
+                            <div>
+                                <div style="font-weight:bold; margin-bottom:6px;">${ally.name}</div>
+                                <div style="font-size:12px; color:#444;">${ally.description || ally.desc || ''}</div>
+                            </div>
+                        </div>
+                    `);
+                };
+
+                html.find('#coin-court-ally-select').on('change', renderPreview);
+                renderPreview();
+            },
+            default: "add"
         }).render(true);
     }
 
@@ -9039,6 +9403,9 @@ export class RebellionSheet extends FormApplication {
      * Execute monthly action for ally
      */
     async _onExecuteMonthlyAction(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+
         const allySlug = ev.currentTarget.dataset.ally;
         const data = DataHandler.get();
 
@@ -9056,7 +9423,7 @@ export class RebellionSheet extends FormApplication {
 
         // Check if action can be used
         if (!DataHandler.canUseMonthlyAction(data, allySlug)) {
-            ui.notifications.warn("Месячное действие уже использовано в этом месяце!");
+            ui.notifications.warn("Месячное действие недоступно в этом месяце.");
             return;
         }
 
@@ -9064,6 +9431,113 @@ export class RebellionSheet extends FormApplication {
         if (allyDef.bonuses?.freeCacheMonthly) {
             await this._handleFreeCacheMonthly(allySlug, allyDef);
         }
+    }
+
+    async _onExecuteWeeklyAllyAction(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const allySlug = ev.currentTarget.dataset.ally;
+        const data = DataHandler.get();
+        const allyDef = getAllyData(allySlug);
+
+        if (!allyDef?.bonuses?.bonusReduceDangerWeekly) {
+            ui.notifications.warn("У этого союзника нет еженедельного действия.");
+            return;
+        }
+
+        const status = DataHandler.getWeeklyAllyActionStatus(data, allySlug);
+        if (!status.canUse) {
+            ui.notifications.warn("Это бонусное действие уже использовано на этой неделе.");
+            return;
+        }
+
+        const bonuses = DataHandler.getRollBonuses(data, 'reduceDanger');
+        const dc = 10 + data.rank;
+        const roll = new Roll("1d20");
+        await roll.evaluate();
+        const total = roll.total + bonuses.security.total;
+        const success = total >= dc;
+
+        if (success) {
+            const reduction = 5 + Math.floor((total - dc) / 10) * 5;
+            const currentEvents = JSON.parse(JSON.stringify(data.events || []));
+            currentEvents.push({
+                name: "Сниженная опасность (действие)",
+                desc: `Опасность снижена на ${reduction}% благодаря бонусному действию дома Аулориан.`,
+                weekStarted: data.week + 1,
+                duration: 1,
+                isPersistent: false,
+                isActionEffect: true,
+                dangerReduction: reduction
+            });
+
+            await DataHandler.update({ events: currentEvents });
+            await DataHandler.markWeeklyAllyActionUsed(DataHandler.get(), allySlug);
+
+            const message = `
+                <div style="
+                    border: 3px solid #2e7d32;
+                    padding: 15px;
+                    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+                    border-radius: 12px;
+                    margin: 10px 0;
+                    box-shadow: 0 4px 8px rgba(46, 125, 50, 0.25);
+                ">
+                    <h5 style="color: #1b5e20; margin: 0 0 15px 0; font-size: 1.3em; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.8em;">🛡️</span>
+                        Аулориан: бонусное Снижение Опасности
+                    </h5>
+
+                    <div style="background: rgba(255,255,255,0.9); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <strong style="color: #2e7d32;">Проверка Безопасности</strong><br>
+                        <span>1d20(${roll.total}) + ${bonuses.security.total} = <strong>${total}</strong> против КС ${dc}</span>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.75); padding: 10px; border-radius: 8px; color: #1b5e20; font-weight: bold; text-align: center;">
+                        ✅ Успех. Опасность снижена на ${reduction}% на следующую неделю.
+                    </div>
+                </div>
+            `;
+            ChatMessage.create({ content: message, speaker: ChatMessage.getSpeaker() });
+            await this._logToJournal(message);
+        } else {
+            const incRoll = new Roll("1d4");
+            await incRoll.evaluate();
+            const inc = incRoll.total;
+
+            await DataHandler.update({ notoriety: data.notoriety + inc });
+            await DataHandler.markWeeklyAllyActionUsed(DataHandler.get(), allySlug);
+
+            const message = `
+                <div style="
+                    border: 3px solid #d32f2f;
+                    padding: 15px;
+                    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+                    border-radius: 12px;
+                    margin: 10px 0;
+                    box-shadow: 0 4px 8px rgba(211, 47, 47, 0.2);
+                ">
+                    <h5 style="color: #b71c1c; margin: 0 0 15px 0; font-size: 1.3em; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.8em;">🛡️</span>
+                        Аулориан: бонусное Снижение Опасности
+                    </h5>
+
+                    <div style="background: rgba(255,255,255,0.9); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <strong style="color: #b71c1c;">Проверка Безопасности</strong><br>
+                        <span>1d20(${roll.total}) + ${bonuses.security.total} = <strong>${total}</strong> против КС ${dc}</span>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.75); padding: 10px; border-radius: 8px; color: #b71c1c; font-weight: bold; text-align: center;">
+                        ❌ Провал. Известность +${inc}.
+                    </div>
+                </div>
+            `;
+            ChatMessage.create({ content: message, speaker: ChatMessage.getSpeaker() });
+            await this._logToJournal(message);
+        }
+
+        this.render(false);
     }
 
 
@@ -9076,6 +9550,8 @@ export class RebellionSheet extends FormApplication {
 
         // Get current data to check usage limits
         const data = DataHandler.get();
+        const monthlyStatus = DataHandler.getMonthlyActionStatus(data, allySlug);
+        const limitedMonthlyCaches = allyDef.bonuses?.freeCacheMonthlyLimits || null;
         const hetamonUsage = data.hetamonCacheUsage || { small: 0, medium: 0, large: 0 };
 
         // Get Hetamon cache settings from data or use defaults
@@ -9096,31 +9572,35 @@ export class RebellionSheet extends FormApplication {
 
         const hetamonCaches = {
             small: {
-                maxUses: hetamonSettings.small.maxUses,
-                currentUses: hetamonUsage.small,
+                maxUses: limitedMonthlyCaches?.small ?? hetamonSettings.small.maxUses,
+                currentUses: limitedMonthlyCaches ? ((limitedMonthlyCaches.small || 0) - (monthlyStatus.remaining?.small || 0)) : hetamonUsage.small,
                 value: hetamonSettings.small.value
             },
             medium: {
-                maxUses: hetamonSettings.medium.maxUses,
-                currentUses: hetamonUsage.medium,
+                maxUses: limitedMonthlyCaches?.medium ?? hetamonSettings.medium.maxUses,
+                currentUses: limitedMonthlyCaches ? ((limitedMonthlyCaches.medium || 0) - (monthlyStatus.remaining?.medium || 0)) : hetamonUsage.medium,
                 value: hetamonSettings.medium.value
             },
             large: {
-                maxUses: hetamonSettings.large.maxUses,
-                currentUses: hetamonUsage.large,
+                maxUses: limitedMonthlyCaches ? 0 : hetamonSettings.large.maxUses,
+                currentUses: limitedMonthlyCaches ? 0 : hetamonUsage.large,
                 value: hetamonSettings.large.value
             }
         };
+
+        const sizeOptionsHtml = [
+            `<option value="small">Малый тайник (${hetamonCaches.small.currentUses}/${hetamonCaches.small.maxUses} использовано)</option>`,
+            `<option value="medium">Средний тайник (${hetamonCaches.medium.currentUses}/${hetamonCaches.medium.maxUses} использовано)</option>`,
+            ...(!limitedMonthlyCaches ? [`<option value="large">Крупный тайник (${hetamonCaches.large.currentUses}/${hetamonCaches.large.maxUses} использовано)</option>`] : [])
+        ].join("");
 
         // Create cache creation dialog
         const content = `
             <form>
                 <div class="form-group">
-                    <label>Тип тайника культа Милани:</label>
+                    <label>Тип бесплатного тайника:</label>
                     <select id="cache-size" style="width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 6px; height: 40px; font-size: 14px;">
-                        <option value="small">Малый тайник (${hetamonCaches.small.currentUses}/${hetamonCaches.small.maxUses} использовано)</option>
-                        <option value="medium">Средний тайник (${hetamonCaches.medium.currentUses}/${hetamonCaches.medium.maxUses} использовано)</option>
-                        <option value="large">Крупный тайник (${hetamonCaches.large.currentUses}/${hetamonCaches.large.maxUses} использовано)</option>
+                        ${sizeOptionsHtml}
                     </select>
                 </div>
                 <div id="cache-info" style="background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
@@ -9147,16 +9627,23 @@ export class RebellionSheet extends FormApplication {
                     label: "Создать",
                     callback: async (html) => {
                         const size = html.find('#cache-size').val();
-                        const location = html.find('#cache-location').val() || "Тайник культа Милани";
+                        const location = html.find('#cache-location').val() || `Тайник ${allyDef.name}`;
                         const value = parseInt(html.find('#cache-value').val()) || 0;
 
                         // Check Hetamon's usage limits
                         const currentData = DataHandler.get();
                         const hetamonUsage = currentData.hetamonCacheUsage || { small: 0, medium: 0, large: 0 };
+                        const currentMonthlyStatus = DataHandler.getMonthlyActionStatus(currentData, allySlug);
                         const cacheInfo = hetamonCaches[size];
 
-                        if (hetamonUsage[size] >= cacheInfo.maxUses) {
-                            ui.notifications.warn(`Хетамон уже использовал все доступные ${size === 'small' ? 'малые' : size === 'medium' ? 'средние' : 'крупные'} тайники!`);
+                        if (limitedMonthlyCaches) {
+                            const remaining = currentMonthlyStatus.remaining?.[size] ?? 0;
+                            if (remaining <= 0) {
+                                ui.notifications.warn(`${allyDef.name} уже использовал все доступные ${size === 'small' ? 'малые' : 'средние'} тайники в этом месяце!`);
+                                return;
+                            }
+                        } else if (hetamonUsage[size] >= cacheInfo.maxUses) {
+                            ui.notifications.warn(`${allyDef.name} уже использовал все доступные ${size === 'small' ? 'малые' : size === 'medium' ? 'средние' : 'крупные'} тайники!`);
                             return;
                         }
 
@@ -9174,13 +9661,16 @@ export class RebellionSheet extends FormApplication {
                         });
 
                         // Update Hetamon's usage counter
-                        const updatedUsage = { ...hetamonUsage };
-                        updatedUsage[size] = (updatedUsage[size] || 0) + 1;
-
-                        await DataHandler.update({
-                            caches,
-                            hetamonCacheUsage: updatedUsage
-                        });
+                        if (limitedMonthlyCaches) {
+                            await DataHandler.update({ caches });
+                        } else {
+                            const updatedUsage = { ...hetamonUsage };
+                            updatedUsage[size] = (updatedUsage[size] || 0) + 1;
+                            await DataHandler.update({
+                                caches,
+                                hetamonCacheUsage: updatedUsage
+                            });
+                        }
 
                         // Log the action
                         const message = `
@@ -9230,7 +9720,7 @@ export class RebellionSheet extends FormApplication {
                         console.log(`Before useMonthlyAction - Week: ${freshData.week}, AllySlug: ${allySlug}`);
                         console.log(`Before - monthlyActions:`, freshData.monthlyActions);
 
-                        await DataHandler.useMonthlyAction(freshData, allySlug);
+                        await DataHandler.useMonthlyAction(freshData, allySlug, { cacheSize: size });
 
                         const afterData = DataHandler.get();
                         console.log(`After useMonthlyAction - monthlyActions:`, afterData.monthlyActions);
@@ -10796,7 +11286,7 @@ export class RebellionSheet extends FormApplication {
         events.splice(eventIndex, 1);
 
         // Добавляем сторонников
-        const newSupporters = (data.supporters || 0) + supportersBonus;
+        const newSupporters = Number(data.supporters || 0) + supportersBonus;
 
         await DataHandler.update({
             events: events,

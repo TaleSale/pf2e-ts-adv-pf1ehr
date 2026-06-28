@@ -659,8 +659,9 @@
     background: #2a5a9a;
 }
 
-/* Monthly Action Button */
-.execute-monthly-action-btn {
+/* Ally Action Buttons */
+.execute-monthly-action-btn,
+.execute-weekly-ally-action-btn {
     background: #194680;
     color: white;
     border: 1px solid #c9ad6a;
@@ -675,7 +676,8 @@
     text-overflow: ellipsis;
 }
 
-.execute-monthly-action-btn:hover {
+.execute-monthly-action-btn:hover,
+.execute-weekly-ally-action-btn:hover {
     background: #2a5a9a;
 }
 
@@ -826,9 +828,40 @@
 /* Ally Controls */
 .ally-controls {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
     margin-bottom: 10px;
+}
+
+.ally-controls > button {
+    width: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.ally-controls > .add-ally-btn {
+    order: 1;
+    flex: 1 1 0;
+}
+
+.ally-controls > .add-coin-court-ally-btn {
+    order: 2;
+    flex: 1 1 0;
+}
+
+.ally-controls > .ally-count {
+    order: 3;
+    margin-left: auto;
+}
+
+.ally-controls > .ally-settings-btn {
+    order: 4;
+    flex-basis: 100%;
+    justify-content: flex-start;
 }
 
 .add-ally-btn {
@@ -845,10 +878,25 @@
     background: #5a9c28;
 }
 
+.add-coin-court-ally-btn {
+    background: #6a1b9a;
+    color: white;
+    border: 1px solid #c9ad6a;
+    padding: 5px 15px;
+    cursor: pointer;
+    font-family: "Cinzel";
+    border-radius: 3px;
+}
+
+.add-coin-court-ally-btn:hover {
+    background: #7b1fa2;
+}
+
 .ally-count {
     font-weight: bold;
     color: #194680;
     font-size: 12px;
+    margin-left: auto;
 }
 
 /* Ally Disabled State (for enabled/disabled toggle) */
@@ -908,6 +956,33 @@
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.team-bonus-action-row {
+    margin-top: 5px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.team-bonus-used-label {
+    color: #666;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.aulorian-bonus-btn {
+    background: #6a1b9a;
+    color: white;
+    border: 1px solid #c9ad6a;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.aulorian-bonus-btn:hover {
+    background: #7b1fa2;
 }
 
 /* Ally Toggle */
@@ -1540,6 +1615,10 @@
 
 .team-unique {
     background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}
+
+.ally-court-section {
+    margin-top: 0;
 }
 
 .team-unique .team-header span {

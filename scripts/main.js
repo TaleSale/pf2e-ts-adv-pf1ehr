@@ -1225,6 +1225,84 @@ Hooks.once("ready", () => {
             return;
         }
 
+        // Обработка результатов броска бонусного действия Аулорианов
+        if (game.rebellionState?.isAulorianBonusRoll && message.isRoll) {
+            const stateTimestamp = game.rebellionState.timestamp || 0;
+            const messageTimestamp = message.timestamp || Date.now();
+            if (messageTimestamp < stateTimestamp) {
+                return;
+            }
+
+            const roll = message.rolls?.[0];
+            if (roll) {
+                const { teamIdx, dc } = game.rebellionState;
+                const total = roll.total;
+
+                game.rebellionState = null;
+
+                setTimeout(async () => {
+                    try {
+                        const data = DataHandler.get();
+                        const team = data.teams[teamIdx];
+                        if (!team) {
+                            console.error("Rebellion: Команда не найдена при обработке бонусного действия Аулорианов");
+                            return;
+                        }
+
+                        const sheet = Object.values(ui.windows).find(w => w instanceof RebellionSheet) || new RebellionSheet();
+                        const rollObj = {
+                            total: roll.dice?.[0]?.results?.[0]?.result || roll.total,
+                            result: roll.dice?.[0]?.results?.[0]?.result || roll.total
+                        };
+                        const additionalInfo = `🏛️ <strong>Бонусное действие дома Аулориан</strong><br>Не расходует обычное действие команды`;
+
+                        if (total >= dc) {
+                            const reduction = 5 + Math.floor((total - dc) / 10) * 5;
+                            const currentEvents = JSON.parse(JSON.stringify(data.events || []));
+                            currentEvents.push({
+                                name: "Сниженная опасность (Аулориан)",
+                                desc: `Опасность снижена на ${reduction}% благодаря бонусному действию дома Аулориан.`,
+                                weekStarted: data.week + 1,
+                                duration: 1,
+                                isPersistent: false,
+                                isActionEffect: true,
+                                dangerReduction: reduction
+                            });
+
+                            const chatMessage = sheet._createTeamActionMessage(
+                                team, 'reduceDanger', 'success', rollObj, total, dc,
+                                `${additionalInfo}<br>Опасность снижена на <strong>${reduction}%</strong> на следующую неделю`
+                            );
+
+                            ChatMessage.create({ content: chatMessage, speaker: ChatMessage.getSpeaker() });
+                            await sheet._logToJournal(chatMessage);
+                            await DataHandler.update({ events: currentEvents });
+                        } else {
+                            const incRoll = new Roll("1d4");
+                            await incRoll.evaluate();
+                            const inc = incRoll.total;
+
+                            const chatMessage = sheet._createTeamActionMessage(
+                                team, 'reduceDanger', 'failure', rollObj, total, dc,
+                                `${additionalInfo}<br>Провал! Известность +${inc}`
+                            );
+
+                            ChatMessage.create({ content: chatMessage, speaker: ChatMessage.getSpeaker() });
+                            await sheet._logToJournal(chatMessage);
+                            await DataHandler.update({ notoriety: data.notoriety + inc });
+                        }
+
+                        await DataHandler.markWeeklyAllyActionUsed(DataHandler.get(), 'aulorian');
+
+                        if (sheet.rendered) sheet.render();
+                    } catch (error) {
+                        console.error("Rebellion: Ошибка при обработке результата бонусного действия Аулорианов:", error);
+                    }
+                }, 100);
+            }
+            return;
+        }
+
         // Обработка результатов броска бонусного действия Мантикке
         if (game.rebellionState?.isManticceBonusRoll && message.isRoll) {
             // Проверяем timestamp для защиты от повторной обработки
