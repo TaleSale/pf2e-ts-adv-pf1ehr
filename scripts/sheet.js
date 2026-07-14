@@ -33,6 +33,23 @@ function getManagerDisplayName(managerId) {
     return managerId;
 }
 
+function getManagerCharismaData(managerId, data = null) {
+    if (!managerId) return { name: "", bonus: 0, actor: null };
+
+    const getChaMod = (actor) => actor?.system?.abilities?.cha?.mod ?? actor?.abilities?.cha?.mod ?? 0;
+    const directActor = game.actors.get(managerId) || game.actors.getName(managerId);
+    if (directActor) return { name: directActor.name, bonus: getChaMod(directActor), actor: directActor };
+
+    const allyDef = getAllyData(managerId);
+    if (allyDef) {
+        const allyData = data?.allies?.find(a => a.slug === managerId);
+        const boundActor = allyData?.actorId ? game.actors.get(allyData.actorId) : null;
+        return { name: boundActor?.name || allyDef.name, bonus: getChaMod(boundActor), actor: boundActor };
+    }
+
+    return { name: managerId, bonus: 0, actor: null };
+}
+
 function getPreferredRollActor() {
     const controlledToken = canvas?.tokens?.controlled?.find(token => token?.actor) ?? null;
     if (controlledToken?.actor) return controlledToken.actor;
@@ -427,18 +444,7 @@ export class RebellionSheet extends FormApplication {
             let baseBonus = checkType ? bonuses[checkType].total : 0;
             let mgrBonus = 0;
             if (team.manager) {
-                // First try to find by name in officer list
-                const m = teamManagers.find(x => x.name === team.manager);
-                if (m) {
-                    mgrBonus = m.bonus;
-                } else {
-                    // Then try to find by actor ID or name
-                    const actor = game.actors.get(team.manager) || game.actors.getName(team.manager);
-                    if (actor) {
-                        mgrBonus = actor.system.abilities?.cha?.mod || 0;
-                        // Don't modify the manager name here - it should be preserved as selected by user
-                    }
-                }
+                mgrBonus = getManagerCharismaData(team.manager, data).bonus;
             }
             const strategistBonusActive = hasStrategist && team.isStrategistTarget;
             let total = baseBonus + mgrBonus + (strategistBonusActive ? 2 : 0);
@@ -1275,13 +1281,10 @@ export class RebellionSheet extends FormApplication {
         let totalMod = baseCheckBonus?.total || 0;
 
         if (team.manager) {
-            const mgr = game.actors.getName(team.manager) || game.actors.get(team.manager);
-            if (mgr) {
-                const mgrBonus = mgr.system?.abilities?.cha?.mod || 0;
-                if (mgrBonus !== 0) {
-                    additionalMods.push({ label: `Командир (${mgr.name})`, value: mgrBonus });
-                    totalMod += mgrBonus;
-                }
+            const mgr = getManagerCharismaData(team.manager, data);
+            if (mgr.bonus !== 0) {
+                additionalMods.push({ label: `Командир (${mgr.name})`, value: mgr.bonus });
+                totalMod += mgr.bonus;
             }
         }
 
@@ -1960,13 +1963,10 @@ export class RebellionSheet extends FormApplication {
 
         // Бонус командира
         if (team.manager) {
-            const mgr = game.actors.getName(team.manager) || game.actors.get(team.manager);
-            if (mgr) {
-                const mgrBonus = mgr.system?.abilities?.cha?.mod || 0;
-                if (mgrBonus !== 0) {
-                    additionalMods.push({ label: `Командир (${mgr.name})`, value: mgrBonus });
-                    totalMod += mgrBonus;
-                }
+            const mgr = getManagerCharismaData(team.manager, data);
+            if (mgr.bonus !== 0) {
+                additionalMods.push({ label: `Командир (${mgr.name})`, value: mgr.bonus });
+                totalMod += mgr.bonus;
             }
         }
 
@@ -2549,12 +2549,9 @@ export class RebellionSheet extends FormApplication {
                 let charismaBonus = 0;
                 let managerName = team.manager || "";
                 if (managerName) {
-                    // Ищем актора по имени или ID
-                    const actor = game.actors.get(managerName) || game.actors.getName(managerName);
-                    if (actor) {
-                        charismaBonus = actor.system?.abilities?.cha?.mod || 0;
-                        managerName = actor.name;
-                    }
+                    const managerData = getManagerCharismaData(managerName, data);
+                    charismaBonus = managerData.bonus;
+                    managerName = managerData.name;
                 }
 
                 currentEvents.push({
@@ -3487,8 +3484,7 @@ export class RebellionSheet extends FormApplication {
 
         let totalMod = bonuses.security.total + (team.bonus || 0) + halfRankBonus + profBonus;
         if (team.manager) {
-            const m = data.officers.find(x => x.actorId === team.manager);
-            if (m) totalMod += m.bonus || 0;
+            totalMod += getManagerCharismaData(team.manager, data).bonus;
         }
 
         // Используем PF2e API для показа интерфейса броска
